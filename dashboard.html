@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - EmpManager</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Dashboard principal -->
+    <div id="dashboardPage" class="page active">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-users-cog"></i>
+                <h2>EmpManager</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-section="dashboard">
+                    <i class="fas fa-home"></i>
+                    <span>Tableau de bord</span>
+                </a>
+                <a href="#" class="nav-item" data-section="employees">
+                    <i class="fas fa-users"></i>
+                    <span>Employés</span>
+                </a>
+                <a href="#" class="nav-item" data-section="departments">
+                    <i class="fas fa-building"></i>
+                    <span>Entreprise</span>
+                </a>
+                <a href="#" class="nav-item" data-section="leaves">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Congés</span>
+                </a>
+                <a href="#" class="nav-item" data-section="attendance">
+                    <i class="fas fa-clock"></i>
+                    <span>Présences</span>
+                </a>
+                <a href="#" class="nav-item" data-section="reports">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Rapports</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <p class="user-name" id="currentUserName">Utilisateur</p>
+                        <p class="user-role" id="currentUserRole">Rôle</p>
+                    </div>
+                </div>
+                <button class="btn btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Déconnexion
+                </button>
+            </div>
+        </aside>
+
+        <!-- Overlay pour fermer le menu sur mobile -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Rechercher..." id="globalSearch">
+                </div>
+                <div class="top-bar-actions">
+                    <button class="icon-btn" title="Notifications">
+                        <i class="fas fa-bell"></i>
+                        <span class="badge">3</span>
+                    </button>
+                    <button class="icon-btn" title="Messages">
+                        <i class="fas fa-envelope"></i>
+                        <span class="badge">5</span>
+                    </button>
+                    <button class="icon-btn" title="Paramètres">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="icon-btn icon-btn-logout" id="logoutBtnTop" title="Déconnexion">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <!-- Section Dashboard -->
+                <section id="dashboardSection" class="content-section active">
+                    <div class="section-header">
+                        <h2>Tableau de bord</h2>
+                        <p>Vue d'ensemble de votre entreprise</p>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon blue">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalEmployees">0</h3>
+                                <p>Employés Total</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalDepartments">0</h3>
+                                <p>Départements</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon orange">
+                                <i class="fas fa-calendar-check"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="presentToday">0</h3>
+                                <p>Présents Aujourd'hui</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon red">
+                                <i class="fas fa-umbrella-beach"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="onLeaveToday">0</h3>
+                                <p>En Congé</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Employés Récents</h3>
+                                <a href="#" class="btn-link">Voir tout</a>
+                            </div>
+                            <div class="card-body">
+                                <div id="recentEmployees" class="employee-list-small">
+                                    <!-- Sera rempli dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Demandes de Congés</h3>
+                                <a href="#" class="btn-link">Voir tout</a>
+                            </div>
+                            <div class="card-body">
+                                <div id="pendingLeaves" class="leave-list-small">
+                                    <!-- Sera rempli dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section Employés -->
+                <section id="employeesSection" class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Gestion des Employés</h2>
+                            <p>Ajouter, modifier et gérer vos employés</p>
+                        </div>
+                        <button class="btn btn-success" id="addEmployeeBtn">
+                            <i class="fas fa-plus"></i>
+                            Ajouter un Employé
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-controls">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="Rechercher un employé..." id="searchEmployee">
+                            </div>
+                            <div class="filter-controls">
+                                <select id="filterDepartment">
+                                    <option value="">Toutes les Entreprises</option>
+                                </select>
+                                <select id="filterPosition">
+                                    <option value="">Tous les postes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-scroll-container">
+                            <table class="data-table" id="employeesTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nom Complet</th>
+                                        <th>Email</th>
+                                        <th>Entreprises</th>
+                                        <th>Poste</th>
+                                        <th>Date d'embauche</th>
+                                        <th>Statut</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employeesTableBody">
+                                    <!-- Sera rempli dynamiquement -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="table-navigation">
+                            <div class="table-info">
+                                Affichage <span id="employeeStart">1</span> - <span id="employeeEnd">10</span> sur <span id="employeeTotal">0</span> employés
+                            </div>
+                            <div class="pagination">
+                                <button class="pagination-btn" id="employeePrevPage">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="pagination-info">Page <span id="employeeCurrentPage">1</span> / <span id="employeeTotalPages">1</span></span>
+                                <button class="pagination-btn" id="employeeNextPage">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section Départements -->
+                <section id="departmentsSection" class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Entreprise</h2>
+                            <p>Entreprise</p>
+                        </div>
+                        <button class="btn btn-success" id="addDepartmentBtn">
+                            <i class="fas fa-plus"></i>
+                            Ajouter une Entreprise
+                        </button>
+                    </div>
+                    <div class="departments-grid" id="departmentsGrid">
+                        <!-- Sera rempli dynamiquement -->
+                    </div>
+                </section>
+
+                <!-- Section Congés -->
+                <section id="leavesSection" class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Gestion des Congés</h2>
+                            <p>Approuver et suivre les demandes de congés</p>
+                        </div>
+                        <button class="btn btn-success" id="requestLeaveBtn">
+                            <i class="fas fa-plus"></i>
+                            Demander un Congé
+                        </button>
+                    </div>
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="pending">En attente</button>
+                        <button class="tab-btn" data-tab="approved">Approuvés</button>
+                        <button class="tab-btn" data-tab="rejected">Rejetés</button>
+                        <button class="tab-btn" data-tab="all">Tous</button>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-scroll-container">
+                            <table class="data-table" id="leavesTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Employé</th>
+                                        <th>Type</th>
+                                        <th>Date Début</th>
+                                        <th>Date Fin</th>
+                                        <th>Jours</th>
+                                        <th>Raison</th>
+                                        <th>Statut</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leavesTableBody">
+                                    <!-- Sera rempli dynamiquement -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="table-navigation">
+                            <div class="table-info">
+                                Affichage des demandes de congés
+                            </div>
+                            <div class="pagination">
+                                <button class="pagination-btn" id="leavePrevPage">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="pagination-info">Page <span id="leaveCurrentPage">1</span> / <span id="leaveTotalPages">1</span></span>
+                                <button class="pagination-btn" id="leaveNextPage">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section Présences -->
+                <section id="attendanceSection" class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Suivi des Présences</h2>
+                            <p>Enregistrer et consulter les présences</p>
+                        </div>
+                        <button class="btn btn-success" id="markAttendanceBtn">
+                            <i class="fas fa-clock"></i>
+                            Marquer Présence
+                        </button>
+                    </div>
+                    <div class="attendance-calendar">
+                        <div class="calendar-header">
+                            <button class="btn btn-sm" id="prevMonth">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <h3 id="currentMonth">Janvier 2026</h3>
+                            <button class="btn btn-sm" id="nextMonth">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div id="attendanceCalendar" class="calendar-grid">
+                            <!-- Sera rempli dynamiquement -->
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-scroll-container">
+                            <table class="data-table" id="attendanceTable">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Employé</th>
+                                        <th>Arrivée</th>
+                                        <th>Départ</th>
+                                        <th>Heures Travaillées</th>
+                                        <th>Statut</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTableBody">
+                                    <!-- Sera rempli dynamiquement -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="table-navigation">
+                            <div class="table-info">
+                                Affichage des présences
+                            </div>
+                            <div class="pagination">
+                                <button class="pagination-btn" id="attendancePrevPage">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="pagination-info">Page <span id="attendanceCurrentPage">1</span> / <span id="attendanceTotalPages">1</span></span>
+                                <button class="pagination-btn" id="attendanceNextPage">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section Rapports -->
+                <section id="reportsSection" class="content-section">
+                    <div class="section-header">
+                        <h2>Rapports et Statistiques</h2>
+                        <p>Analyses et données de l'entreprise</p>
+                    </div>
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <h3>Rapport de Présence</h3>
+                            <p>Statistiques mensuelles des présences</p>
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Télécharger
+                            </button>
+                        </div>
+                        <div class="report-card">
+                            <h3>Rapport des Congés</h3>
+                            <p>Analyse des demandes de congés</p>
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Télécharger
+                            </button>
+                        </div>
+                        <div class="report-card">
+                            <h3>Rapport par Département</h3>
+                            <p>Performance par département</p>
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Télécharger
+                            </button>
+                        </div>
+                        <div class="report-card">
+                            <h3>Rapport RH Complet</h3>
+                            <p>Rapport mensuel complet</p>
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Télécharger
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Ajout/Modification Employé -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="employeeModalTitle">Ajouter un Employé</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="employeeForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empFirstName">Prénom *</label>
+                        <input type="text" id="empFirstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="empLastName">Nom *</label>
+                        <input type="text" id="empLastName" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empEmail">Email *</label>
+                        <input type="email" id="empEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="empPhone">Téléphone</label>
+                        <input type="tel" id="empPhone">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empDepartment">Département *</label>
+                        <select id="empDepartment" required>
+                            <option value="">Sélectionner...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="empPosition">Poste *</label>
+                        <input type="text" id="empPosition" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empHireDate">Date d'embauche *</label>
+                        <input type="date" id="empHireDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="empSalary">Salaire</label>
+                        <input type="number" id="empSalary" min="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empCNPS">Numéro CNPS</label>
+                        <input type="text" id="empCNPS" placeholder="Ex: 123456789">
+                    </div>
+                    <div class="form-group">
+                        <label for="empAddress">Adresse</label>
+                        <input type="text" id="empAddress">
+                    </div>
+                </div>
+                <input type="hidden" id="empId">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('employeeModal')">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Enregistrer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Département -->
+    <div id="departmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="departmentModalTitle">Ajouter un Département</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="departmentForm">
+                <div class="form-group">
+                    <label for="deptName">Nom du Département *</label>
+                    <input type="text" id="deptName" required>
+                </div>
+                <div class="form-group">
+                    <label for="deptManager">Responsable</label>
+                    <input type="text" id="deptManager">
+                </div>
+                <div class="form-group">
+                    <label for="deptDescription">Description</label>
+                    <textarea id="deptDescription" rows="3"></textarea>
+                </div>
+                <input type="hidden" id="deptId">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('departmentModal')">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Enregistrer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Demande de Congé -->
+    <div id="leaveModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Demander un Congé</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="leaveForm">
+                <div class="form-group">
+                    <label for="leaveEmployee">Employé *</label>
+                    <select id="leaveEmployee" required>
+                        <option value="">Sélectionner...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="leaveType">Type de Congé *</label>
+                    <select id="leaveType" required>
+                        <option value="">Sélectionner...</option>
+                        <option value="paid">Congé Payé</option>
+                        <option value="sick">Congé Maladie</option>
+                        <option value="unpaid">Congé Sans Solde</option>
+                        <option value="parental">Congé Parental</option>
+                        <option value="other">Autre</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="leaveStartDate">Date Début *</label>
+                        <input type="date" id="leaveStartDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="leaveEndDate">Date Fin *</label>
+                        <input type="date" id="leaveEndDate" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="leaveReason">Raison</label>
+                    <textarea id="leaveReason" rows="3"></textarea>
+                </div>
+                <input type="hidden" id="leaveId">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('leaveModal')">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i>
+                        Soumettre
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Présence -->
+    <div id="attendanceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Marquer la Présence</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="attendanceForm">
+                <div class="form-group">
+                    <label for="attEmployee">Employé *</label>
+                    <select id="attEmployee" required>
+                        <option value="">Sélectionner...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="attDate">Date *</label>
+                    <input type="date" id="attDate" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="attCheckIn">Heure d'Arrivée *</label>
+                        <input type="time" id="attCheckIn" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="attCheckOut">Heure de Départ</label>
+                        <input type="time" id="attCheckOut">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="attStatus">Statut *</label>
+                    <select id="attStatus" required>
+                        <option value="present">Présent</option>
+                        <option value="absent">Absent</option>
+                        <option value="late">En Retard</option>
+                        <option value="half-day">Demi-journée</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('attendanceModal')">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Enregistrer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Déconnexion / Changement de compte -->
+    <div id="logoutModal" class="modal">
+        <div class="modal-content modal-account-switch">
+            <div class="modal-header">
+                <h3>Options du Compte</h3>
+                <button class="close-modal" onclick="closeModal('logoutModal')">&times;</button>
+            </div>
+            <div class="account-switch-content">
+                <div class="current-account">
+                    <i class="fas fa-user-circle"></i>
+                    <div>
+                        <p class="current-user-name" id="modalCurrentUserName">Utilisateur</p>
+                        <p class="current-user-role" id="modalCurrentUserRole">Rôle actuel</p>
+                    </div>
+                </div>
+
+                <div class="account-options">
+                    <h4>Changer de compte</h4>
+                    <div class="account-buttons">
+                        <button class="btn-account-switch" data-role="admin" onclick="switchAccount('admin')">
+                            <i class="fas fa-user-shield"></i>
+                            <div>
+                                <strong>Administrateur</strong>
+                                <span>Accès complet</span>
+                            </div>
+                        </button>
+                        <button class="btn-account-switch" data-role="manager" onclick="switchAccount('manager')">
+                            <i class="fas fa-user-tie"></i>
+                            <div>
+                                <strong>Manager</strong>
+                                <span>Gestion d'équipe</span>
+                            </div>
+                        </button>
+                        <button class="btn-account-switch" data-role="employee" onclick="switchAccount('employee')">
+                            <i class="fas fa-user"></i>
+                            <div>
+                                <strong>Employé</strong>
+                                <span>Accès standard</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('logoutModal')">Annuler</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmLogout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Se déconnecter
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="api-config.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

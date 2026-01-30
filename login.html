@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - EmpManager</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Page de connexion -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-box">
+                <div class="login-header">
+                    <i class="fas fa-users-cog"></i>
+                    <h1>EmpManager</h1>
+                    <p>Système de Gestion du Personnel</p>
+                </div>
+                <!-- Formulaire de connexion -->
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">
+                            <i class="fas fa-user"></i>
+                            Nom d'utilisateur
+                        </label>
+                        <input type="text" id="username" placeholder="Entrez votre nom d'utilisateur" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">
+                            <i class="fas fa-lock"></i>
+                            Mot de passe
+                        </label>
+                        <input type="password" id="password" placeholder="Entrez votre mot de passe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userRole">
+                            <i class="fas fa-user-tag"></i>
+                            Rôle
+                        </label>
+                        <select id="userRole" required>
+                            <option value="">Sélectionnez un rôle</option>
+                            <option value="admin">Administrateur</option>
+                            <option value="manager">Manager</option>
+                            <option value="employee">Employé</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Se connecter
+                    </button>
+                </form>
+
+                <!-- Formulaire d'inscription (caché par défaut) -->
+                <form id="registerForm" class="hidden">
+                    <div class="form-group">
+                        <label for="regUsername">
+                            <i class="fas fa-user"></i>
+                            Nom d'utilisateur
+                        </label>
+                        <input type="text" id="regUsername" placeholder="Choisissez un nom d'utilisateur" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regEmail">
+                            <i class="fas fa-envelope"></i>
+                            Email
+                        </label>
+                        <input type="email" id="regEmail" placeholder="Entrez votre email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">
+                            <i class="fas fa-lock"></i>
+                            Mot de passe
+                        </label>
+                        <input type="password" id="regPassword" placeholder="Créez un mot de passe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regConfirmPassword">
+                            <i class="fas fa-lock"></i>
+                            Confirmer le mot de passe
+                        </label>
+                        <input type="password" id="regConfirmPassword" placeholder="Confirmez votre mot de passe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regRole">
+                            <i class="fas fa-user-tag"></i>
+                            Rôle
+                        </label>
+                        <select id="regRole" required>
+                            <option value="">Sélectionnez un rôle</option>
+                            <option value="admin">Administrateur</option>
+                            <option value="manager">Manager</option>
+                            <option value="employee">Employé</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-block">
+                        <i class="fas fa-user-plus"></i>
+                        Créer un compte
+                    </button>
+                </form>
+
+                <!-- Lien pour basculer entre connexion et inscription -->
+                <div class="auth-switch">
+                    <p id="switchToRegister">Pas encore de compte ? <a href="#" id="showRegisterLink">Créer un compte</a></p>
+                    <p id="switchToLogin" class="hidden">Déjà un compte ? <a href="#" id="showLoginLink">Se connecter</a></p>
+                </div>
+
+                <div class="login-info">
+                    <p><strong>Utilisateurs de démonstration:</strong></p>
+                    <p>Admin: admin / admin123</p>
+                    <p>Manager: manager / manager123</p>
+                    <p>Employé: employee / employee123</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="api-config.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>
