@@ -1,6 +1,48 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Department, Employee, Leave, Attendance
+from .models import Direction, Department, Employee, Leave, Attendance, PasswordRecord
+
+
+class DirectionSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Direction"""
+    class Meta:
+        model = Direction
+        fields = ['id', 'name']
+
+
+class PasswordRecordSerializer(serializers.ModelSerializer):
+    """Serializer pour la table des mots de passe"""
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    email = serializers.CharField(source='user.email', read_only=True)
+    direction = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PasswordRecord
+        fields = [
+            'id', 'username', 'full_name', 'email', 'password_plain',
+            'role', 'direction', 'department_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_full_name(self, obj):
+        name = obj.user.get_full_name()
+        return name if name else obj.user.username
+
+    def get_direction(self, obj):
+        try:
+            employee = obj.user.employee_profile
+            return employee.direction or '-'
+        except Employee.DoesNotExist:
+            return '-'
+
+    def get_department_name(self, obj):
+        try:
+            employee = obj.user.employee_profile
+            return employee.department.name if employee.department else '-'
+        except Employee.DoesNotExist:
+            return '-'
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -40,11 +82,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = [
-            'id', 'first_name', 'last_name', 'full_name', 'email', 'phone',
-            'birth_date', 'gender', 'department', 'department_name', 'position', 'hire_date',
+            'id', 'matricule', 'first_name', 'last_name', 'full_name', 'email', 'phone',
+            'birth_date', 'gender', 'department', 'department_name', 'direction', 'position', 'hire_date',
             'salary', 'cnps', 'cnps_number', 'city', 'commune', 'address',
             'marital_status', 'number_of_children', 'status', 'user', 'user_details',
-            'photo', 'cni_document',
+            'photo', 'cni_recto', 'cni_verso',
             'leave_balance', 'leaves_taken_this_year', 'leaves_pending_this_year',
             'annual_leave_allowance', 'age', 'retirement_year', 'created_at', 'updated_at'
         ]
@@ -105,14 +147,16 @@ class LeaveSerializer(serializers.ModelSerializer):
     """Serializer pour le modèle Leave"""
     employee_name = serializers.CharField(source='employee.full_name', read_only=True)
     days_count = serializers.ReadOnlyField()
+    manager_approved_by_name = serializers.CharField(source='manager_approved_by.get_full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
 
     class Meta:
         model = Leave
         fields = [
             'id', 'employee', 'employee_name', 'leave_type', 'start_date',
-            'end_date', 'days_count', 'reason', 'status', 'approved_by',
-            'approved_by_name', 'created_at', 'updated_at'
+            'end_date', 'days_count', 'reason', 'status',
+            'manager_approved_by', 'manager_approved_by_name',
+            'approved_by', 'approved_by_name', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -174,7 +218,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     """Serializer pour l'enregistrement d'utilisateurs"""
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    role = serializers.ChoiceField(choices=['admin', 'manager', 'employee'], required=False)
+    role = serializers.ChoiceField(choices=['admin', 'manager', 'entreprise', 'employee'], required=False)
 
     class Meta:
         model = User

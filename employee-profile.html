@@ -273,10 +273,32 @@
             border: 2px solid var(--light-gray);
         }
 
-        /* Responsive */
+        /* Desktop - Grands écrans (>992px) */
+        @media (min-width: 993px) {
+            .employee-sidebar {
+                position: fixed;
+                left: 0;
+                width: 280px;
+            }
+
+            .employee-main {
+                margin-left: 280px;
+            }
+
+            .mobile-toggle {
+                display: none !important;
+            }
+
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+
+        /* Responsive - Tablettes et mobiles */
         @media (max-width: 992px) {
             .employee-sidebar {
                 position: fixed;
+                width: 280px;
                 left: -280px;
                 transition: left 0.3s ease;
             }
@@ -291,6 +313,10 @@
 
             .mobile-toggle {
                 display: block !important;
+            }
+
+            .sidebar-overlay {
+                display: block;
             }
         }
 
@@ -437,6 +463,514 @@
         .input-error:focus {
             box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
         }
+
+        /* ================================
+           STYLES CNPS - Fiche Employé
+           ================================ */
+        .cnps-card {
+            background: #ffffff;
+            border-radius: 0;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border: 1px solid #d0d0d0;
+        }
+
+        .cnps-section-header {
+            background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
+            color: white;
+            padding: 0.6rem 1rem;
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cnps-section-header i {
+            font-size: 1rem;
+        }
+
+        /* Layout avec photo à droite */
+        .cnps-content-wrapper {
+            display: flex;
+            background: #ffffff;
+        }
+
+        .cnps-info-left {
+            flex: 1;
+        }
+
+        .cnps-photo-right {
+            width: 160px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-left: 1px solid #e0e0e0;
+        }
+
+        .cnps-photo {
+            width: 120px;
+            height: 150px;
+            border: 2px solid #9e9e9e;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+        }
+
+        .cnps-photo i {
+            font-size: 4rem;
+            color: #bdbdbd;
+        }
+
+        .cnps-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .cnps-photo-matricule {
+            margin-top: 0.5rem;
+            font-weight: 700;
+            color: #333;
+            font-size: 0.85rem;
+        }
+
+        /* Lignes avec alternance de couleurs */
+        .cnps-row {
+            display: flex;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #e8e8e8;
+            background: #ffffff;
+        }
+
+        .cnps-row.alt {
+            background: #f0f0f0;
+        }
+
+        .cnps-row:last-child {
+            border-bottom: none;
+        }
+
+        .cnps-label {
+            font-weight: 600;
+            color: #333;
+            min-width: 180px;
+            flex-shrink: 0;
+        }
+
+        .cnps-value {
+            color: #c44536;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .cnps-retirement {
+            color: #ff6f00;
+            font-weight: 700;
+        }
+
+        .cnps-highlight {
+            color: #2e7d32;
+            font-weight: 700;
+        }
+
+        /* Deux colonnes */
+        .cnps-two-columns {
+            display: flex;
+            background: #ffffff;
+        }
+
+        .cnps-column {
+            flex: 1;
+        }
+
+        .cnps-column:first-child {
+            border-right: 1px solid #e0e0e0;
+        }
+
+        /* Tableau de données (Liste des enfants) */
+        .cnps-data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cnps-data-table thead {
+            background: linear-gradient(180deg, #757575 0%, #616161 100%);
+        }
+
+        .cnps-data-table th {
+            padding: 0.6rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .cnps-data-table tbody td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .cnps-no-data {
+            text-align: center !important;
+            color: #e53935;
+            font-weight: 700;
+            padding: 1.5rem !important;
+            font-size: 0.95rem;
+        }
+
+        /* Documents grid */
+        .cnps-docs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .cnps-doc-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            text-align: center;
+        }
+
+        .cnps-doc-item .cnps-label {
+            min-width: auto;
+            text-align: center;
+        }
+
+        .cnps-doc-value {
+            display: flex;
+            justify-content: center;
+        }
+
+        .cnps-no-doc {
+            color: #e53935;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        /* Responsive pour CNPS */
+        @media (max-width: 992px) {
+            .cnps-two-columns {
+                flex-direction: column;
+            }
+
+            .cnps-column:first-child {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            .cnps-content-wrapper {
+                flex-direction: column-reverse;
+            }
+
+            .cnps-photo-right {
+                width: 100%;
+                border-left: none;
+                border-bottom: 1px solid #e0e0e0;
+                padding: 1rem;
+            }
+
+            .cnps-docs-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cnps-label {
+                min-width: 140px;
+            }
+        }
+
+        /* Responsive pour tablettes */
+        @media (max-width: 768px) {
+            .employee-main {
+                padding: 1rem;
+            }
+
+            .employee-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+                padding-bottom: 1rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .employee-header h1 {
+                font-size: 1.75rem;
+            }
+
+            .employee-header p {
+                font-size: 0.9rem;
+            }
+
+            #downloadProfileBtn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .cnps-section-header {
+                font-size: 0.8rem;
+                padding: 0.5rem 0.75rem;
+            }
+
+            .cnps-row {
+                flex-direction: column;
+                gap: 0.25rem;
+                padding: 0.75rem 1rem;
+            }
+
+            .cnps-label {
+                min-width: auto;
+                font-size: 0.8rem;
+                color: #666;
+            }
+
+            .cnps-value {
+                font-size: 0.95rem;
+            }
+
+            .cnps-data-table {
+                font-size: 0.85rem;
+            }
+
+            .cnps-data-table th,
+            .cnps-data-table td {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .leave-stats {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .leave-stat-card {
+                padding: 1rem;
+            }
+
+            .leave-stat-card h4 {
+                font-size: 1.5rem;
+            }
+
+            .leave-balance-card {
+                flex-direction: column;
+                text-align: center;
+                gap: 1rem;
+            }
+
+            .leave-balance-card > div:last-child {
+                text-align: center !important;
+            }
+
+            .profile-form-container {
+                padding: 1rem;
+            }
+
+            .form-section-title {
+                font-size: 1rem;
+            }
+
+            /* Amélioration du tableau des congés sur mobile */
+            .leaves-table-container {
+                overflow-x: auto;
+            }
+
+            .leaves-table-container .data-table {
+                min-width: 600px;
+            }
+        }
+
+        /* Responsive pour mobiles */
+        @media (max-width: 576px) {
+            .mobile-toggle {
+                top: 0.5rem;
+                left: 0.5rem;
+                padding: 0.5rem 0.75rem;
+            }
+
+            .employee-main {
+                padding: 0.75rem;
+                padding-top: 3.5rem;
+            }
+
+            .employee-header {
+                margin-bottom: 1rem;
+            }
+
+            .employee-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .cnps-card {
+                margin-bottom: 1rem;
+            }
+
+            .cnps-section-header {
+                font-size: 0.75rem;
+                padding: 0.4rem 0.6rem;
+            }
+
+            .cnps-section-header i {
+                font-size: 0.85rem;
+            }
+
+            .cnps-photo {
+                width: 100px;
+                height: 125px;
+            }
+
+            .cnps-photo i {
+                font-size: 3rem;
+            }
+
+            .cnps-photo-matricule {
+                font-size: 0.75rem;
+            }
+
+            .cnps-row {
+                padding: 0.6rem 0.75rem;
+            }
+
+            .cnps-label {
+                font-size: 0.75rem;
+            }
+
+            .cnps-value {
+                font-size: 0.9rem;
+            }
+
+            .cnps-data-table th {
+                font-size: 0.7rem;
+                padding: 0.4rem 0.5rem;
+            }
+
+            .cnps-data-table td {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.5rem;
+            }
+
+            .leave-stats {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .leave-stat-card {
+                padding: 0.75rem;
+            }
+
+            .leave-stat-card h4 {
+                font-size: 1.25rem;
+            }
+
+            .leave-stat-card p {
+                font-size: 0.8rem;
+            }
+
+            .form-grid {
+                gap: 1rem;
+            }
+
+            .form-group label {
+                font-size: 0.85rem;
+            }
+
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                padding: 0.75rem;
+                font-size: 0.9rem;
+            }
+
+            .file-upload-container {
+                padding: 0.75rem;
+            }
+
+            .photo-preview {
+                width: 100px;
+                height: 100px;
+            }
+
+            .btn {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.85rem;
+            }
+
+            .btn-sm {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+            }
+
+            /* Navigation mobile */
+            .employee-sidebar {
+                width: 260px;
+                left: -260px;
+            }
+
+            .employee-sidebar.open {
+                left: 0;
+            }
+
+            .employee-sidebar-header {
+                padding: 1.5rem 1rem;
+            }
+
+            .employee-sidebar-header i {
+                font-size: 2rem;
+            }
+
+            .employee-sidebar-header h2 {
+                font-size: 1.25rem;
+            }
+
+            .employee-nav-item {
+                padding: 0.875rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            /* Boutons d'action du formulaire */
+            .profile-form-container form > div:last-child {
+                flex-direction: column;
+            }
+
+            .profile-form-container form > div:last-child button {
+                width: 100%;
+            }
+
+            /* Section demande de congé */
+            #requestLeaveSection .form-grid > div[style*="grid-column"] {
+                grid-column: span 1 !important;
+            }
+
+            .leave-form-container form > div:last-child {
+                flex-direction: column;
+            }
+
+            .leave-form-container form > div:last-child button {
+                width: 100%;
+            }
+        }
+
+        /* Amélioration de l'accessibilité tactile */
+        @media (hover: none) and (pointer: coarse) {
+            .employee-nav-item {
+                padding: 1rem 1.5rem;
+            }
+
+            .btn {
+                min-height: 44px;
+            }
+
+            .action-btn {
+                padding: 0.6rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -445,6 +979,9 @@
     </button>
 
     <div class="employee-space">
+        <!-- Overlay pour fermer le menu sur mobile -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
         <!-- Sidebar -->
         <aside class="employee-sidebar" id="employeeSidebar">
             <div class="employee-sidebar-header">
@@ -482,7 +1019,7 @@
 
         <!-- Contenu principal -->
         <main class="employee-main">
-            <!-- Section: Mon Profil -->
+            <!-- Section: Mon Profil - Style CNPS -->
             <section class="employee-section active" id="profileSection">
                 <div class="employee-header">
                     <div>
@@ -495,89 +1032,186 @@
                     </button>
                 </div>
 
-                <div class="info-cards">
-                    <div class="info-card">
-                        <div class="info-card-header">
-                            <i class="fas fa-user"></i>
-                            <h3>Informations personnelles</h3>
+                <!-- INFORMATIONS GÉNÉRALES -->
+                <div class="cnps-card">
+                    <div class="cnps-section-header">
+                        <i class="fas fa-user"></i>
+                        INFORMATIONS GÉNÉRALES
+                    </div>
+                    <div class="cnps-content-wrapper">
+                        <!-- Informations à gauche -->
+                        <div class="cnps-info-left">
+                            <div class="cnps-row">
+                                <span class="cnps-label">Matricule :</span>
+                                <span class="cnps-value" id="viewMatricule">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Nom et Prénoms :</span>
+                                <span class="cnps-value" id="viewFullName">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Date de Naissance :</span>
+                                <span class="cnps-value" id="viewBirthDate">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Lieu de Naissance :</span>
+                                <span class="cnps-value" id="viewBirthPlace">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Âge actuel :</span>
+                                <span class="cnps-value" id="viewAge">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Année de Retraite :</span>
+                                <span class="cnps-value cnps-retirement" id="viewRetirementYear">-</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Nom complet</span>
-                            <span class="info-value" id="viewFullName">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Date de naissance</span>
-                            <span class="info-value" id="viewBirthDate">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Âge actuel</span>
-                            <span class="info-value" id="viewAge">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Sexe</span>
-                            <span class="info-value" id="viewGender">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Situation matrimoniale</span>
-                            <span class="info-value" id="viewMaritalStatus">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Nombre d'enfants</span>
-                            <span class="info-value" id="viewChildren">-</span>
-                        </div>
-                        <div class="info-row" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 0.75rem; border-radius: 8px; margin-top: 0.5rem;">
-                            <span class="info-label" style="color: #92400e;"><i class="fas fa-hourglass-end"></i> Année de retraite</span>
-                            <span class="info-value" id="viewRetirementYear" style="color: #92400e; font-weight: 700;">-</span>
+                        <!-- Photo à droite -->
+                        <div class="cnps-photo-right">
+                            <div class="cnps-photo" id="viewPhotoImg">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="cnps-photo-matricule" id="viewPhotoMatricule">-</div>
                         </div>
                     </div>
 
-                    <div class="info-card">
-                        <div class="info-card-header">
-                            <i class="fas fa-address-book"></i>
-                            <h3>Coordonnées</h3>
+                    <!-- Deuxième partie des infos générales - 2 colonnes -->
+                    <div class="cnps-two-columns">
+                        <div class="cnps-column">
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Sexe :</span>
+                                <span class="cnps-value" id="viewGender">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Numéro CNPS :</span>
+                                <span class="cnps-value" id="viewCNPS">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Téléphone :</span>
+                                <span class="cnps-value" id="viewPhone">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Ville :</span>
+                                <span class="cnps-value" id="viewCity">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Situation Famille :</span>
+                                <span class="cnps-value" id="viewMaritalStatus">-</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Email</span>
-                            <span class="info-value" id="viewEmail">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Téléphone</span>
-                            <span class="info-value" id="viewPhone">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Ville</span>
-                            <span class="info-value" id="viewCity">-</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Commune</span>
-                            <span class="info-value" id="viewCommune">-</span>
+                        <div class="cnps-column">
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Email :</span>
+                                <span class="cnps-value" id="viewEmail">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Commune :</span>
+                                <span class="cnps-value" id="viewCommune">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Nombre d'enfant :</span>
+                                <span class="cnps-value" id="viewChildren">-</span>
+                            </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="info-card">
-                        <div class="info-card-header">
-                            <i class="fas fa-briefcase"></i>
-                            <h3>Informations professionnelles</h3>
+                <!-- EMPLOI -->
+                <div class="cnps-card">
+                    <div class="cnps-section-header">
+                        <i class="fas fa-briefcase"></i>
+                        EMPLOI
+                    </div>
+                    <div class="cnps-two-columns">
+                        <div class="cnps-column">
+                            <div class="cnps-row">
+                                <span class="cnps-label">Entreprise :</span>
+                                <span class="cnps-value" id="viewCompany">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Direction :</span>
+                                <span class="cnps-value" id="viewDirection">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Lieu de Travail :</span>
+                                <span class="cnps-value" id="viewCity2">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Emploi :</span>
+                                <span class="cnps-value" id="viewPosition">-</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Entreprise</span>
-                            <span class="info-value" id="viewCompany">-</span>
+                        <div class="cnps-column">
+                            <div class="cnps-row">
+                                <span class="cnps-label">Date d'embauche :</span>
+                                <span class="cnps-value" id="viewHireDate">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Salaire :</span>
+                                <span class="cnps-value" id="viewSalary">-</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Poste</span>
-                            <span class="info-value" id="viewPosition">-</span>
+                    </div>
+                </div>
+
+                <!-- ETAT AGENT -->
+                <div class="cnps-card">
+                    <div class="cnps-section-header">
+                        <i class="fas fa-flag"></i>
+                        ETAT AGENT
+                    </div>
+                    <div class="cnps-two-columns">
+                        <div class="cnps-column">
+                            <div class="cnps-row">
+                                <span class="cnps-label">Date prise de service :</span>
+                                <span class="cnps-value" id="viewServiceDate">-</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Date de départ à la retraite :</span>
+                                <span class="cnps-value" id="viewRetirementDate">-</span>
+                            </div>
+                            <div class="cnps-row">
+                                <span class="cnps-label">Etat :</span>
+                                <span class="cnps-value" id="viewStatus">-</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Date d'embauche</span>
-                            <span class="info-value" id="viewHireDate">-</span>
+                        <div class="cnps-column">
+                            <div class="cnps-row">
+                                <span class="cnps-label">Solde Congés :</span>
+                                <span class="cnps-value cnps-highlight" id="viewLeaveBalance">30 jours</span>
+                            </div>
+                            <div class="cnps-row alt">
+                                <span class="cnps-label">Congés Pris :</span>
+                                <span class="cnps-value" id="viewLeavesTaken">0 jours</span>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Salaire</span>
-                            <span class="info-value" id="viewSalary">-</span>
+                    </div>
+                </div>
+
+                <!-- DOCUMENTS D'IDENTITÉ -->
+                <div class="cnps-card">
+                    <div class="cnps-section-header">
+                        <i class="fas fa-id-card"></i>
+                        DOCUMENTS D'IDENTITÉ
+                    </div>
+                    <div class="cnps-docs-grid">
+                        <div class="cnps-doc-item">
+                            <span class="cnps-label">Photo d'identité</span>
+                            <span class="cnps-doc-value" id="viewPhoto">
+                                <span class="cnps-no-doc">Non téléchargée</span>
+                            </span>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Numéro CNPS</span>
-                            <span class="info-value" id="viewCNPS">-</span>
+                        <div class="cnps-doc-item">
+                            <span class="cnps-label">CNI - Recto</span>
+                            <span class="cnps-doc-value" id="viewCniRecto">
+                                <span class="cnps-no-doc">Non téléchargé</span>
+                            </span>
+                        </div>
+                        <div class="cnps-doc-item">
+                            <span class="cnps-label">CNI - Verso</span>
+                            <span class="cnps-doc-value" id="viewCniVerso">
+                                <span class="cnps-no-doc">Non téléchargé</span>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -601,16 +1235,16 @@
                             </h3>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="lastName">Nom *</label>
-                                    <input type="text" id="lastName" required>
+                                    <label for="lastName">Nom</label>
+                                    <input type="text" id="lastName" placeholder="Ex: OUATTARA">
                                 </div>
                                 <div class="form-group">
-                                    <label for="firstName">Prénom *</label>
-                                    <input type="text" id="firstName" required>
+                                    <label for="firstName">Prénom</label>
+                                    <input type="text" id="firstName" placeholder="Ex: Peyila Al Hassane">
                                 </div>
                                 <div class="form-group">
-                                    <label for="birthDate">Date de naissance *</label>
-                                    <input type="date" id="birthDate" required>
+                                    <label for="birthDate">Date de naissance</label>
+                                    <input type="date" id="birthDate" placeholder="JJ/MM/AAAA">
                                     <!-- Info retraite (s'affiche après saisie de la date) -->
                                     <div id="retirementInfo" class="retirement-info" style="display: none;">
                                         <i class="fas fa-info-circle"></i>
@@ -618,16 +1252,16 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="gender">Sexe *</label>
-                                    <select id="gender" required>
+                                    <label for="gender">Sexe</label>
+                                    <select id="gender">
                                         <option value="">Sélectionnez...</option>
                                         <option value="male">Masculin</option>
                                         <option value="female">Féminin</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="maritalStatus">Situation matrimoniale *</label>
-                                    <select id="maritalStatus" required>
+                                    <label for="maritalStatus">Situation matrimoniale</label>
+                                    <select id="maritalStatus">
                                         <option value="">Sélectionnez...</option>
                                         <option value="single">Célibataire</option>
                                         <option value="married">Marié(e)</option>
@@ -636,8 +1270,8 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="numberOfChildren">Nombre d'enfants *</label>
-                                    <input type="number" id="numberOfChildren" min="0" value="0" required>
+                                    <label for="numberOfChildren">Nombre d'enfants</label>
+                                    <input type="number" id="numberOfChildren" min="0" value="0" placeholder="Ex: 2">
                                 </div>
                             </div>
                         </div>
@@ -649,20 +1283,20 @@
                             </h3>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="email">Email *</label>
-                                    <input type="email" id="email" required>
+                                    <label for="email">Email</label>
+                                    <input type="email" id="email" placeholder="Ex: prenom.nom@email.com">
                                 </div>
                                 <div class="form-group">
-                                    <label for="phone">Téléphone *</label>
-                                    <input type="tel" id="phone" required>
+                                    <label for="phone">Téléphone</label>
+                                    <input type="tel" id="phone" placeholder="Ex: 07 08 09 10 11">
                                 </div>
                                 <div class="form-group">
-                                    <label for="city">Ville *</label>
-                                    <input type="text" id="city" required>
+                                    <label for="city">Ville</label>
+                                    <input type="text" id="city" placeholder="Ex: Abidjan">
                                 </div>
                                 <div class="form-group">
                                     <label for="commune">Commune</label>
-                                    <input type="text" id="commune">
+                                    <input type="text" id="commune" placeholder="Ex: Cocody">
                                 </div>
                             </div>
                         </div>
@@ -680,20 +1314,30 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
+                                    <label for="direction">Direction *</label>
+                                    <select id="direction" required>
+                                        <option value="">Sélectionnez...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
                                     <label for="position">Poste *</label>
-                                    <input type="text" id="position" required>
+                                    <input type="text" id="position" placeholder="Ex: Agent de sécurité" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="hireDate">Date d'embauche *</label>
-                                    <input type="date" id="hireDate" required>
+                                    <label for="hireDate">Date d'embauche</label>
+                                    <input type="date" id="hireDate" placeholder="JJ/MM/AAAA">
                                 </div>
                                 <div class="form-group">
-                                    <label for="salary">Salaire (FCFA) *</label>
-                                    <input type="number" id="salary" min="0" required>
+                                    <label for="salary">Salaire (FCFA)</label>
+                                    <input type="number" id="salary" min="0" placeholder="Ex: 150000">
                                 </div>
                                 <div class="form-group">
-                                    <label for="cnpsNumber">Numéro CNPS *</label>
-                                    <input type="text" id="cnpsNumber" required>
+                                    <label for="matricule">Matricule</label>
+                                    <input type="text" id="matricule" placeholder="Ex: MAT-001">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cnpsNumber">Numéro CNPS</label>
+                                    <input type="text" id="cnpsNumber" placeholder="Ex: 1234567890">
                                 </div>
                             </div>
                         </div>
@@ -705,7 +1349,7 @@
                             </h3>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="photo">Photo d'identité *</label>
+                                    <label for="photo">Photo d'identité</label>
                                     <div class="file-upload-container">
                                         <div class="photo-preview" id="photoPreview">
                                             <i class="fas fa-user-circle"></i>
@@ -720,16 +1364,31 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cniDocument">Carte Nationale d'Identité (CNI) *</label>
+                                    <label for="cniRecto">CNI - Recto</label>
                                     <div class="file-upload-container">
-                                        <div class="file-preview" id="cniPreview">
+                                        <div class="file-preview" id="cniRectoPreview">
                                             <i class="fas fa-id-card"></i>
                                             <span>Aucun document</span>
                                         </div>
-                                        <input type="file" id="cniDocument" accept="image/*,.pdf" style="display: none;">
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cniDocument').click()">
+                                        <input type="file" id="cniRecto" accept="image/*,.pdf" style="display: none;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cniRecto').click()">
                                             <i class="fas fa-upload"></i>
-                                            Télécharger la CNI
+                                            Télécharger le Recto
+                                        </button>
+                                        <p class="file-hint">Format: JPG, PNG, PDF (max 5 Mo)</p>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="cniVerso">CNI - Verso</label>
+                                    <div class="file-upload-container">
+                                        <div class="file-preview" id="cniVersoPreview">
+                                            <i class="fas fa-id-card"></i>
+                                            <span>Aucun document</span>
+                                        </div>
+                                        <input type="file" id="cniVerso" accept="image/*,.pdf" style="display: none;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cniVerso').click()">
+                                            <i class="fas fa-upload"></i>
+                                            Télécharger le Verso
                                         </button>
                                         <p class="file-hint">Format: JPG, PNG, PDF (max 5 Mo)</p>
                                     </div>

@@ -2,8 +2,69 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
+class Direction(models.Model):
+    """Modèle pour les directions"""
+    name = models.CharField(max_length=200, unique=True, verbose_name="Nom de la direction")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Direction"
+        verbose_name_plural = "Directions"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class ManagerProfile(models.Model):
+    """Profil manager - lie un utilisateur à ses directions"""
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='manager_profile',
+        verbose_name="Utilisateur"
+    )
+    directions = models.ManyToManyField(
+        Direction,
+        blank=True,
+        related_name='managers',
+        verbose_name="Directions gérées"
+    )
+
+    class Meta:
+        verbose_name = "Profil Manager"
+        verbose_name_plural = "Profils Manager"
+
+    def __str__(self):
+        dirs = ", ".join(d.name for d in self.directions.all())
+        return f"{self.user.username} - {dirs or 'Aucune direction'}"
+
+
+class CompanyProfile(models.Model):
+    """Profil entreprise - lie un utilisateur à son entreprise"""
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='company_profile',
+        verbose_name="Utilisateur"
+    )
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.CASCADE,
+        related_name='company_managers',
+        verbose_name="Entreprise"
+    )
+
+    class Meta:
+        verbose_name = "Profil Entreprise"
+        verbose_name_plural = "Profils Entreprise"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.department.name}"
+
+
 class Department(models.Model):
-    """Modèle pour les départements/entreprises"""
+    """Modèle pour les entreprises"""
     name = models.CharField(max_length=200, verbose_name="Nom")
     manager = models.CharField(max_length=200, blank=True, null=True, verbose_name="Responsable")
     description = models.TextField(blank=True, null=True, verbose_name="Description")
@@ -11,8 +72,8 @@ class Department(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Département"
-        verbose_name_plural = "Départements"
+        verbose_name = "Entreprise"
+        verbose_name_plural = "Entreprises"
         ordering = ['name']
 
     def __str__(self):
@@ -43,22 +104,37 @@ class Employee(models.Model):
         ('female', 'Féminin'),
     ]
 
+    matricule = models.CharField(
+        max_length=50,
+        verbose_name="Matricule",
+        null=True,
+        blank=True,
+        unique=True
+    )
     first_name = models.CharField(max_length=100, verbose_name="Prénom")
     last_name = models.CharField(max_length=100, verbose_name="Nom")
     email = models.EmailField(unique=True, verbose_name="Email")
-    phone = models.CharField(max_length=20, verbose_name="Téléphone")
-    birth_date = models.DateField(verbose_name="Date de naissance")
+    phone = models.CharField(max_length=20, verbose_name="Téléphone", null=True, blank=True)
+    birth_date = models.DateField(verbose_name="Date de naissance", null=True, blank=True)
     gender = models.CharField(
         max_length=10,
         choices=GENDER_CHOICES,
-        verbose_name="Sexe"
+        verbose_name="Sexe",
+        null=True,
+        blank=True
     )
     department = models.ForeignKey(
         Department,
         on_delete=models.SET_NULL,
         null=True,
         related_name='employees',
-        verbose_name="Département"
+        verbose_name="Entreprise"
+    )
+    direction = models.CharField(
+        max_length=200,
+        verbose_name="Direction",
+        null=True,
+        blank=True
     )
     position = models.CharField(max_length=100, verbose_name="Poste")
     hire_date = models.DateField(verbose_name="Date d'embauche")
@@ -70,17 +146,21 @@ class Employee(models.Model):
     )
     cnps = models.CharField(
         max_length=50,
-        verbose_name="Numéro CNPS"
+        verbose_name="Numéro CNPS",
+        null=True,
+        blank=True
     )
     # Adresse détaillée
-    city = models.CharField(max_length=100, verbose_name="Ville")
+    city = models.CharField(max_length=100, verbose_name="Ville", null=True, blank=True)
     commune = models.CharField(max_length=100, blank=True, null=True, verbose_name="Commune")
     address = models.TextField(blank=True, null=True, verbose_name="Adresse complète")
     # Situation familiale
     marital_status = models.CharField(
         max_length=20,
         choices=MARITAL_STATUS_CHOICES,
-        verbose_name="Situation matrimoniale"
+        verbose_name="Situation matrimoniale",
+        null=True,
+        blank=True
     )
     number_of_children = models.PositiveIntegerField(default=0, verbose_name="Nombre d'enfants")
     status = models.CharField(
@@ -100,11 +180,21 @@ class Employee(models.Model):
     # Documents d'identité
     photo = models.ImageField(
         upload_to='employees/photos/',
-        verbose_name="Photo d'identité"
+        verbose_name="Photo d'identité",
+        null=True,
+        blank=True
     )
-    cni_document = models.FileField(
+    cni_recto = models.FileField(
         upload_to='employees/cni/',
-        verbose_name="Carte Nationale d'Identité"
+        verbose_name="CNI Recto",
+        null=True,
+        blank=True
+    )
+    cni_verso = models.FileField(
+        upload_to='employees/cni/',
+        verbose_name="CNI Verso",
+        null=True,
+        blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -158,6 +248,35 @@ class Employee(models.Model):
         return self.ANNUAL_LEAVE_ALLOWANCE - self.leaves_taken_this_year
 
 
+class PasswordRecord(models.Model):
+    """Stocke les mots de passe en référence pour consultation admin"""
+    ROLE_CHOICES = [
+        ('admin', 'Administrateur'),
+        ('manager', 'Manager'),
+        ('entreprise', 'Entreprise'),
+        ('employee', 'Employé'),
+    ]
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='password_record',
+        verbose_name="Utilisateur"
+    )
+    password_plain = models.CharField(max_length=200, verbose_name="Mot de passe")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee', verbose_name="Rôle")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Mot de passe"
+        verbose_name_plural = "Mots de passe"
+        ordering = ['user__last_name', 'user__first_name']
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.username} - {self.get_role_display()}"
+
+
 class Leave(models.Model):
     """Modèle pour les demandes de congés"""
     LEAVE_TYPES = [
@@ -170,6 +289,7 @@ class Leave(models.Model):
 
     STATUS_CHOICES = [
         ('pending', 'En attente'),
+        ('manager_approved', 'Validé Manager'),
         ('approved', 'Approuvé'),
         ('rejected', 'Rejeté'),
     ]
@@ -194,13 +314,21 @@ class Leave(models.Model):
         default='pending',
         verbose_name="Statut"
     )
+    manager_approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manager_approved_leaves',
+        verbose_name="Validé par (Manager)"
+    )
     approved_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='approved_leaves',
-        verbose_name="Approuvé par"
+        verbose_name="Approuvé par (Entreprise)"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

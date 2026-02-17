@@ -19,7 +19,7 @@ const DEMO_USERS = {
     employee: { username: 'employee', password: 'employee123', role: 'employee', name: 'Employé' }
 };
 
-// Départements par défaut
+// Entreprises par défaut
 const DEFAULT_DEPARTMENTS = [
     { id: 1, name: 'Ressources Humaines', manager: 'Marie Dupont', description: 'Gestion du personnel et recrutement', employees: 8 },
     { id: 2, name: 'Informatique', manager: 'Jean Martin', description: 'Développement et support technique', employees: 15 },
@@ -371,7 +371,7 @@ function populateDepartmentFilters() {
     ).join('');
 
     if (deptSelect) {
-        deptSelect.innerHTML = '<option value="">Tous les départements</option>' + deptOptions;
+        deptSelect.innerHTML = '<option value="">Tous les entreprises</option>' + deptOptions;
     }
 
     if (empDeptSelect) {
@@ -465,7 +465,7 @@ function deleteEmployee(id) {
 }
 
 // ===========================
-// Gestion des Départements
+// Gestion des Entreprises
 // ===========================
 function renderDepartmentsGrid() {
     const grid = document.getElementById('departmentsGrid');
@@ -507,14 +507,14 @@ function openDepartmentModal(deptId = null) {
 
     if (deptId) {
         const dept = AppState.departments.find(d => d.id === deptId);
-        title.textContent = 'Modifier un Département';
+        title.textContent = 'Modifier un Entreprise';
 
         document.getElementById('deptId').value = dept.id;
         document.getElementById('deptName').value = dept.name;
         document.getElementById('deptManager').value = dept.manager;
         document.getElementById('deptDescription').value = dept.description;
     } else {
-        title.textContent = 'Ajouter un Département';
+        title.textContent = 'Ajouter un Entreprise';
         form.reset();
         document.getElementById('deptId').value = '';
     }
@@ -545,7 +545,7 @@ function handleDepartmentSubmit(e) {
     populateDepartmentFilters();
     closeModal('departmentModal');
 
-    alert('Département enregistré avec succès !');
+    alert('Entreprise enregistré avec succès !');
 }
 
 function editDepartment(id) {
@@ -553,11 +553,11 @@ function editDepartment(id) {
 }
 
 function deleteDepartment(id) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce département ?')) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce entreprise ?')) {
         AppState.departments = AppState.departments.filter(d => d.id !== id);
         saveToLocalStorage();
         renderDepartmentsGrid();
-        alert('Département supprimé avec succès !');
+        alert('Entreprise supprimé avec succès !');
     }
 }
 

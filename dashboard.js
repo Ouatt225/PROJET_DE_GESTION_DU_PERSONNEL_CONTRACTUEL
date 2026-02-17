@@ -10,7 +10,7 @@ const AppState = {
     currentSection: 'dashboard'
 };
 
-// Départements par défaut
+// Entreprises par défaut
 const DEFAULT_DEPARTMENTS = [
     { id: 1, name: 'Ressources Humaines', manager: 'Marie Dupont', description: 'Gestion du personnel et recrutement', employees: 8 },
     { id: 2, name: 'Informatique', manager: 'Jean Martin', description: 'Développement et support technique', employees: 15 },
@@ -76,8 +76,10 @@ function checkAuthentication() {
     AppState.currentUser = currentUser;
 
     // Afficher les informations de l'utilisateur
-    document.getElementById('currentUserName').textContent = AppState.currentUser.name || AppState.currentUser.username;
-    document.getElementById('currentUserRole').textContent = getRoleLabel(AppState.currentUser.role);
+    const userNameEl = document.getElementById('currentUserName');
+    const userRoleEl = document.getElementById('currentUserRole');
+    if (userNameEl) userNameEl.textContent = AppState.currentUser.name || AppState.currentUser.username;
+    if (userRoleEl) userRoleEl.textContent = getRoleLabel(AppState.currentUser.role);
 
     // Appliquer les permissions basées sur le rôle
     applyRolePermissions();
@@ -93,7 +95,7 @@ async function initializeApp() {
 
 async function loadDataFromAPI() {
     try {
-        // Charger les départements
+        // Charger les entreprises
         const departments = await apiGet(API_ENDPOINTS.DEPARTMENTS);
         if (departments) {
             // Adapter le format pour la compatibilité frontend
@@ -117,6 +119,7 @@ async function loadDataFromAPI() {
                 position: emp.position,
                 hireDate: emp.hire_date,
                 salary: emp.salary,
+                matricule: emp.matricule,
                 cnps: emp.cnps,
                 address: emp.address,
                 status: emp.status
@@ -204,9 +207,9 @@ function setupEventListeners() {
         logoutBtn.addEventListener('click', handleLogout);
     }
 
-    const logoutBtnTop = document.getElementById('logoutBtnTop');
-    if (logoutBtnTop) {
-        logoutBtnTop.addEventListener('click', handleLogout);
+    const logoutBtnBottom = document.getElementById('logoutBtnBottom');
+    if (logoutBtnBottom) {
+        logoutBtnBottom.addEventListener('click', handleLogout);
     }
 
     // Navigation
@@ -245,7 +248,6 @@ function setupEventListeners() {
 
     // Recherche
     document.getElementById('searchEmployee')?.addEventListener('input', handleEmployeeSearch);
-
     // Filtres
     document.getElementById('filterDepartment')?.addEventListener('change', renderEmployeesTable);
     document.getElementById('filterPosition')?.addEventListener('change', renderEmployeesTable);
@@ -269,8 +271,10 @@ function openLogoutModal() {
 
     // Mettre à jour les informations de l'utilisateur dans le modal
     const currentUser = AppState.currentUser;
-    document.getElementById('modalCurrentUserName').textContent = currentUser.name;
-    document.getElementById('modalCurrentUserRole').textContent = getRoleLabel(currentUser.role);
+    const modalNameEl = document.getElementById('modalCurrentUserName');
+    const modalRoleEl = document.getElementById('modalCurrentUserRole');
+    if (modalNameEl) modalNameEl.textContent = currentUser.name;
+    if (modalRoleEl) modalRoleEl.textContent = getRoleLabel(currentUser.role);
 
     // Afficher le modal
     modal.classList.add('active');
@@ -292,8 +296,10 @@ function switchAccount(newRole) {
         AppState.currentUser = newAccount;
 
         // Mettre à jour l'affichage
-        document.getElementById('currentUserName').textContent = newAccount.name;
-        document.getElementById('currentUserRole').textContent = getRoleLabel(newAccount.role);
+        const switchNameEl = document.getElementById('currentUserName');
+        const switchRoleEl = document.getElementById('currentUserRole');
+        if (switchNameEl) switchNameEl.textContent = newAccount.name;
+        if (switchRoleEl) switchRoleEl.textContent = getRoleLabel(newAccount.role);
 
         // Appliquer les permissions du nouveau rôle
         applyRolePermissions();
@@ -323,6 +329,7 @@ function getRoleLabel(role) {
     const labels = {
         'admin': 'Administrateur',
         'manager': 'Manager',
+        'entreprise': 'Entreprise',
         'employee': 'Employé'
     };
     return labels[role] || role;
@@ -340,6 +347,11 @@ function applyRolePermissions() {
         document.querySelectorAll('.action-btn.edit, .action-btn.delete').forEach(btn => {
             btn.classList.add('hidden');
         });
+    }
+
+    // Entreprise : ne peut pas gérer les entreprises
+    if (role === 'entreprise') {
+        document.getElementById('addDepartmentBtn')?.classList.add('hidden');
     }
 }
 
@@ -445,21 +457,36 @@ function renderRecentEmployees() {
 }
 
 function renderPendingLeaves() {
-    const pendingLeaves = AppState.leaves.filter(l => l.status === 'pending').slice(0, 5);
+    // Afficher les congés récents (tous statuts), triés par date de création
+    const recentLeaves = AppState.leaves
+        .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
+        .slice(0, 5);
 
     const container = document.getElementById('pendingLeaves');
-    container.innerHTML = pendingLeaves.map(leave => `
+
+    if (recentLeaves.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 1rem; color: var(--text-secondary);">Aucune demande de congé</p>';
+        return;
+    }
+
+    container.innerHTML = recentLeaves.map(leave => {
+        // Extraire les initiales du nom de l'employé
+        const nameParts = (leave.employeeName || '').split(' ');
+        const initials = nameParts.length >= 2
+            ? nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)
+            : (nameParts[0] || '').substring(0, 2);
+
+        return `
         <div class="list-item">
-            <div class="list-item-avatar">
-                <i class="fas fa-calendar-alt"></i>
-            </div>
+            <div class="list-item-avatar">${initials}</div>
             <div class="list-item-info">
                 <div class="name">${leave.employeeName}</div>
-                <div class="detail">${formatDate(leave.startDate)} - ${formatDate(leave.endDate)} (${leave.days} jours)</div>
+                <div class="detail">${getLeaveTypeLabel(leave.type)} - ${formatDate(leave.startDate)} au ${formatDate(leave.endDate)} (${leave.days} jours)</div>
             </div>
-            <span class="status-badge status-${leave.status}">En attente</span>
+            <span class="status-badge status-${leave.status}">${getLeaveStatusLabel(leave.status)}</span>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // ===========================
@@ -492,6 +519,9 @@ function renderEmployeesTable() {
             <td><span class="status-badge status-${emp.status}">${getStatusLabel(emp.status)}</span></td>
             <td>
                 <div class="action-buttons">
+                    <button class="action-btn download" onclick="downloadEmployeeProfile(${emp.id})" title="Télécharger le profil">
+                        <i class="fas fa-download"></i>
+                    </button>
                     <button class="action-btn edit" onclick="editEmployee(${emp.id})">
                         <i class="fas fa-edit"></i> Modifier
                     </button>
@@ -517,7 +547,7 @@ function populateDepartmentFilters() {
     ).join('');
 
     if (deptSelect) {
-        deptSelect.innerHTML = '<option value="">Tous les départements</option>' + deptOptions;
+        deptSelect.innerHTML = '<option value="">Tous les entreprises</option>' + deptOptions;
     }
 
     if (empDeptSelect) {
@@ -553,6 +583,7 @@ function openEmployeeModal(employeeId = null) {
         document.getElementById('empPosition').value = employee.position;
         document.getElementById('empHireDate').value = employee.hireDate;
         document.getElementById('empSalary').value = employee.salary;
+        document.getElementById('empMatricule').value = employee.matricule || '';
         document.getElementById('empCNPS').value = employee.cnps || '';
         document.getElementById('empAddress').value = employee.address;
     } else {
@@ -569,7 +600,7 @@ async function handleEmployeeSubmit(e) {
 
     const id = document.getElementById('empId').value;
 
-    // Trouver l'ID du département à partir du nom
+    // Trouver l'ID du entreprise à partir du nom
     const departmentName = document.getElementById('empDepartment').value;
     const department = AppState.departments.find(d => d.name === departmentName);
     const departmentId = department ? department.id : null;
@@ -584,6 +615,7 @@ async function handleEmployeeSubmit(e) {
         position: document.getElementById('empPosition').value,
         hire_date: document.getElementById('empHireDate').value,
         salary: parseFloat(document.getElementById('empSalary').value) || 0,
+        matricule: document.getElementById('empMatricule').value || '',
         cnps: document.getElementById('empCNPS').value || '',
         address: document.getElementById('empAddress').value || '',
         status: 'active'
@@ -601,6 +633,7 @@ async function handleEmployeeSubmit(e) {
 
         if (result.ok) {
             await loadDataFromAPI();
+            renderDashboard();
             renderEmployeesTable();
             closeModal('employeeModal');
             alert('Employé enregistré avec succès !');
@@ -623,6 +656,7 @@ async function deleteEmployee(id) {
             const result = await apiDelete(API_ENDPOINTS.EMPLOYEE_DETAIL(id));
             if (result.ok) {
                 await loadDataFromAPI();
+                renderDashboard();
                 renderEmployeesTable();
                 alert('Employé supprimé avec succès !');
             } else {
@@ -636,7 +670,7 @@ async function deleteEmployee(id) {
 }
 
 // ===========================
-// Gestion des Départements
+// Gestion des Entreprises
 // ===========================
 function renderDepartmentsGrid() {
     const grid = document.getElementById('departmentsGrid');
@@ -678,14 +712,14 @@ function openDepartmentModal(deptId = null) {
 
     if (deptId) {
         const dept = AppState.departments.find(d => d.id === deptId);
-        title.textContent = 'Modifier un Département';
+        title.textContent = 'Modifier un Entreprise';
 
         document.getElementById('deptId').value = dept.id;
         document.getElementById('deptName').value = dept.name;
         document.getElementById('deptManager').value = dept.manager;
         document.getElementById('deptDescription').value = dept.description;
     } else {
-        title.textContent = 'Ajouter un Département';
+        title.textContent = 'Ajouter un Entreprise';
         form.reset();
         document.getElementById('deptId').value = '';
     }
@@ -716,16 +750,17 @@ async function handleDepartmentSubmit(e) {
         if (result.ok) {
             // Recharger les données
             await loadDataFromAPI();
+            renderDashboard();
             renderDepartmentsGrid();
             populateDepartmentFilters();
             closeModal('departmentModal');
-            alert('Département enregistré avec succès !');
+            alert('Entreprise enregistré avec succès !');
         } else {
             alert('Erreur: ' + JSON.stringify(result.data));
         }
     } catch (error) {
         console.error('Erreur:', error);
-        alert('Erreur lors de l\'enregistrement du département');
+        alert('Erreur lors de l\'enregistrement du entreprise');
     }
 }
 
@@ -734,19 +769,20 @@ function editDepartment(id) {
 }
 
 async function deleteDepartment(id) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce département ?')) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce entreprise ?')) {
         try {
             const result = await apiDelete(API_ENDPOINTS.DEPARTMENT_DETAIL(id));
             if (result.ok) {
                 await loadDataFromAPI();
+                renderDashboard();
                 renderDepartmentsGrid();
-                alert('Département supprimé avec succès !');
+                alert('Entreprise supprimé avec succès !');
             } else {
                 alert('Erreur lors de la suppression');
             }
         } catch (error) {
             console.error('Erreur:', error);
-            alert('Erreur lors de la suppression du département');
+            alert('Erreur lors de la suppression du entreprise');
         }
     }
 }
@@ -761,8 +797,57 @@ function renderLeavesTable(filter = 'all') {
         filteredLeaves = AppState.leaves.filter(l => l.status === filter);
     }
 
+    const role = AppState.currentUser ? AppState.currentUser.role : '';
+
     const tbody = document.getElementById('leavesTableBody');
-    tbody.innerHTML = filteredLeaves.map(leave => `
+    tbody.innerHTML = filteredLeaves.map(leave => {
+        // Déterminer les boutons d'action selon le rôle et le statut
+        let actionButtons = '';
+
+        if (role === 'admin') {
+            // Admin peut approuver à n'importe quelle étape
+            if (leave.status === 'pending' || leave.status === 'manager_approved') {
+                actionButtons += `
+                    <button class="action-btn approve" onclick="approveLeave(${leave.id})">
+                        <i class="fas fa-check"></i> Approuver
+                    </button>`;
+            }
+            if (leave.status !== 'approved' && leave.status !== 'rejected') {
+                actionButtons += `
+                    <button class="action-btn reject" onclick="rejectLeave(${leave.id})">
+                        <i class="fas fa-times"></i> Rejeter
+                    </button>`;
+            }
+        } else if (role === 'manager') {
+            // Manager : peut valider seulement les "pending"
+            if (leave.status === 'pending') {
+                actionButtons += `
+                    <button class="action-btn approve" onclick="approveLeave(${leave.id})">
+                        <i class="fas fa-check"></i> Valider
+                    </button>
+                    <button class="action-btn reject" onclick="rejectLeave(${leave.id})">
+                        <i class="fas fa-times"></i> Rejeter
+                    </button>`;
+            }
+        } else if (role === 'entreprise') {
+            if (leave.status === 'pending') {
+                // Pending : en attente du manager, l'entreprise ne peut pas encore agir
+                actionButtons += `
+                    <span class="action-info"><i class="fas fa-hourglass-half"></i> En attente du Manager</span>`;
+            } else if (leave.status === 'manager_approved') {
+                // Manager a validé : l'entreprise peut maintenant approuver ou rejeter
+                actionButtons += `
+                    <span class="action-info validated"><i class="fas fa-user-check"></i> Validé Manager</span>
+                    <button class="action-btn approve" onclick="approveLeave(${leave.id})">
+                        <i class="fas fa-check"></i> Approuver
+                    </button>
+                    <button class="action-btn reject" onclick="rejectLeave(${leave.id})">
+                        <i class="fas fa-times"></i> Rejeter
+                    </button>`;
+            }
+        }
+
+        return `
         <tr>
             <td>#${leave.id}</td>
             <td>${leave.employeeName}</td>
@@ -774,21 +859,15 @@ function renderLeavesTable(filter = 'all') {
             <td><span class="status-badge status-${leave.status}">${getLeaveStatusLabel(leave.status)}</span></td>
             <td>
                 <div class="action-buttons">
-                    ${leave.status === 'pending' ? `
-                        <button class="action-btn approve" onclick="approveLeave(${leave.id})">
-                            <i class="fas fa-check"></i> Approuver
-                        </button>
-                        <button class="action-btn reject" onclick="rejectLeave(${leave.id})">
-                            <i class="fas fa-times"></i> Rejeter
-                        </button>
-                    ` : ''}
+                    ${actionButtons}
                     <button class="action-btn delete" onclick="deleteLeave(${leave.id})">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function handleTabClick(e) {
@@ -838,6 +917,7 @@ async function handleLeaveSubmit(e) {
 
         if (result.ok) {
             await loadDataFromAPI();
+            renderDashboard();
             renderLeavesTable();
             closeModal('leaveModal');
             alert('Demande de congé soumise avec succès !');
@@ -855,6 +935,7 @@ async function approveLeave(id) {
         const result = await apiPost(API_ENDPOINTS.LEAVE_APPROVE(id), {});
         if (result.ok) {
             await loadDataFromAPI();
+            renderDashboard();
             renderLeavesTable('pending');
             alert('Congé approuvé !');
         } else {
@@ -871,6 +952,7 @@ async function rejectLeave(id) {
         const result = await apiPost(API_ENDPOINTS.LEAVE_REJECT(id), {});
         if (result.ok) {
             await loadDataFromAPI();
+            renderDashboard();
             renderLeavesTable('pending');
             alert('Congé rejeté !');
         } else {
@@ -888,6 +970,7 @@ async function deleteLeave(id) {
             const result = await apiDelete(API_ENDPOINTS.LEAVE_DETAIL(id));
             if (result.ok) {
                 await loadDataFromAPI();
+                renderDashboard();
                 renderLeavesTable();
                 alert('Demande de congé supprimée !');
             } else {
@@ -1018,6 +1101,7 @@ function getLeaveTypeLabel(type) {
 function getLeaveStatusLabel(status) {
     const labels = {
         'pending': 'En attente',
+        'manager_approved': 'Validé Manager',
         'approved': 'Approuvé',
         'rejected': 'Rejeté'
     };
@@ -1034,6 +1118,375 @@ function getAttendanceStatusLabel(status) {
     return labels[status] || status;
 }
 
+// ===========================
+// Téléchargement du profil employé en PDF
+// ===========================
+async function downloadEmployeeProfile(employeeId) {
+    // Trouver l'employé dans les données locales
+    const employee = AppState.employees.find(e => e.id === employeeId);
+
+    if (!employee) {
+        alert('Employé non trouvé');
+        return;
+    }
+
+    // Récupérer les données complètes de l'employé depuis l'API
+    try {
+        const fullEmployee = await apiGet(API_ENDPOINTS.EMPLOYEE_DETAIL(employeeId));
+        if (fullEmployee) {
+            await generateEmployeePDF(fullEmployee);
+        } else {
+            // Utiliser les données locales si l'API échoue
+            await generateEmployeePDF(employee);
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        // Utiliser les données locales si l'API échoue
+        await generateEmployeePDF(employee);
+    }
+}
+
+async function generateEmployeePDF(employee) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const pageWidth = 210;
+    const marginL = 10;
+    const contentW = 190;
+    let y = 10;
+    const rowH = 10;
+
+    // Couleurs CNPS
+    const green = [56, 118, 29];
+    const valueColor = [56, 142, 60];
+    const border = [180, 180, 180];
+    const black = [0, 0, 0];
+
+    // Fonctions utilitaires locales
+    function calculateAge(birthDate) {
+        if (!birthDate) return null;
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        return age;
+    }
+
+    function calculateRetirementYear(birthDate) {
+        if (!birthDate) return null;
+        return new Date(birthDate).getFullYear() + 60;
+    }
+
+    function calcRetirementDate(bd) {
+        if (!bd) return '-';
+        const b = new Date(bd);
+        const r = new Date(b);
+        r.setFullYear(r.getFullYear() + 60);
+        return r.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatDatePDF(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatCurrency(amount) {
+        if (!amount) return '-';
+        return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
+    }
+
+    function getMaritalStatusLabel(status) {
+        const labels = { 'single': 'Célibataire', 'married': 'Marié(e)', 'divorced': 'Divorcé(e)', 'widowed': 'Veuf/Veuve' };
+        return labels[status] || status || '-';
+    }
+
+    function getGenderLabel(gender) {
+        const labels = { 'male': 'Masculin', 'female': 'Féminin' };
+        return labels[gender] || gender || '-';
+    }
+
+    function getEmployeeStatusLabel(status) {
+        const labels = { 'active': 'Présent et Payé', 'inactive': 'Absent', 'on_leave': 'En Congé' };
+        return labels[status] || status || '-';
+    }
+
+    function loadImageAsBase64PDF(url) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = function() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
+                } catch (e) { resolve(null); }
+            };
+            img.onerror = function() { resolve(null); };
+            const sep = url.includes('?') ? '&' : '?';
+            img.src = url + sep + 't=' + Date.now();
+        });
+    }
+
+    // Nettoyage des caractères spéciaux pour jsPDF
+    function clean(str) {
+        return String(str || '-').replace(/[\u00A0\u202F\u2009\u200B]/g, ' ');
+    }
+
+    // === Fonctions de dessin ===
+    function drawSectionHeader(title) {
+        if (y > 270) { doc.addPage(); y = 10; }
+        doc.setFillColor(...green);
+        doc.rect(marginL, y, contentW, 12, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('  ' + title, marginL + 3, y + 8.5);
+        y += 12;
+    }
+
+    function drawInfoRow(label, value, labelW, totalW) {
+        if (y > 280) { doc.addPage(); y = 10; }
+        doc.setDrawColor(...border);
+        doc.setLineWidth(0.3);
+        doc.rect(marginL, y, labelW, rowH);
+        doc.setTextColor(...black);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label + ' :', marginL + 3, y + 7);
+        doc.rect(marginL + labelW, y, totalW - labelW, rowH);
+        doc.setTextColor(...valueColor);
+        doc.setFont('helvetica', 'normal');
+        doc.text(clean(value).toUpperCase(), marginL + labelW + 3, y + 7);
+        y += rowH;
+    }
+
+    function fitValue(text, maxW) {
+        doc.setFontSize(10);
+        if (doc.getTextWidth(text) <= maxW) return;
+        doc.setFontSize(8);
+        if (doc.getTextWidth(text) <= maxW) return;
+        doc.setFontSize(7);
+    }
+
+    function drawOneColRow(label, value) {
+        if (y > 280) { doc.addPage(); y = 10; }
+        const lw = 45;
+        const maxValW = contentW - lw - 3;
+        doc.setDrawColor(...border);
+        doc.setLineWidth(0.3);
+        doc.rect(marginL, y, contentW, rowH);
+        doc.setTextColor(...black);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label + ' :', marginL + 3, y + 7);
+        doc.setTextColor(...valueColor);
+        doc.setFont('helvetica', 'normal');
+        let v = clean(value).toUpperCase();
+        fitValue(v, maxValW);
+        doc.text(v, marginL + lw, y + 7, { maxWidth: maxValW });
+        doc.setFontSize(10);
+        y += rowH;
+    }
+
+    function drawTwoColRow(label1, value1, label2, value2) {
+        if (y > 280) { doc.addPage(); y = 10; }
+        const halfW = contentW / 2;
+        const lw = 45;
+        const maxValW = halfW - lw - 3;
+        doc.setDrawColor(...border);
+        doc.setLineWidth(0.3);
+
+        doc.rect(marginL, y, halfW, rowH);
+        doc.setTextColor(...black);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label1 + ' :', marginL + 3, y + 7);
+        doc.setTextColor(...valueColor);
+        doc.setFont('helvetica', 'normal');
+        let v1 = clean(value1).toUpperCase();
+        fitValue(v1, maxValW);
+        doc.text(v1, marginL + lw, y + 7, { maxWidth: maxValW });
+        doc.setFontSize(10);
+
+        doc.rect(marginL + halfW, y, halfW, rowH);
+        if (label2) {
+            doc.setTextColor(...black);
+            doc.setFont('helvetica', 'bold');
+            doc.text(label2 + ' :', marginL + halfW + 3, y + 7);
+            doc.setTextColor(...valueColor);
+            doc.setFont('helvetica', 'normal');
+            let v2 = clean(value2).toUpperCase();
+            fitValue(v2, maxValW);
+            doc.text(v2, marginL + halfW + lw, y + 7, { maxWidth: maxValW });
+            doc.setFontSize(10);
+        } else {
+            doc.setTextColor(...valueColor);
+            doc.text('-', marginL + halfW + 3, y + 7);
+        }
+        y += rowH;
+    }
+
+    // === INFORMATIONS GÉNÉRALES ===
+    drawSectionHeader('INFORMATIONS GÉNÉRALES');
+
+    const infoLabelW = 48;
+    const infoTotalW = 120;
+    const photoAreaX = marginL + infoTotalW;
+    const photoAreaW = contentW - infoTotalW;
+    const infoStartY = y;
+
+    const matricule = employee.matricule || '-';
+    const fullName = `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
+    const birthDate = employee.birth_date || employee.birthDate;
+    const age = calculateAge(birthDate);
+    const retirementYear = calculateRetirementYear(birthDate);
+
+    drawInfoRow('Matricule', matricule, infoLabelW, infoTotalW);
+    drawInfoRow('Nom et Prénoms', fullName, infoLabelW, infoTotalW);
+    drawInfoRow('Date de Naissance', formatDatePDF(birthDate), infoLabelW, infoTotalW);
+    drawInfoRow('Lieu de Naissance', employee.birth_place || '-', infoLabelW, infoTotalW);
+    drawInfoRow('Âge actuel', age ? `${age} ans` : '-', infoLabelW, infoTotalW);
+    drawInfoRow('Année de Retraite', retirementYear || '-', infoLabelW, infoTotalW);
+
+    // Zone photo (côté droit)
+    const infoEndY = y;
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.3);
+    doc.rect(photoAreaX, infoStartY, photoAreaW, infoEndY - infoStartY);
+
+    if (employee.photo) {
+        try {
+            const imgData = await loadImageAsBase64PDF(employee.photo);
+            if (imgData) {
+                const photoW = 35;
+                const photoH = 40;
+                const photoX = photoAreaX + (photoAreaW - photoW) / 2;
+                const photoY = infoStartY + 2;
+                doc.addImage(imgData, 'JPEG', photoX, photoY, photoW, photoH);
+                doc.setTextColor(...black);
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.text(String(matricule), photoAreaX + photoAreaW / 2, infoEndY - 2, { align: 'center' });
+            }
+        } catch (e) {
+            console.error('Erreur chargement photo:', e);
+        }
+    }
+
+    y += 5;
+
+    // === Détails personnels (deux colonnes) ===
+    drawTwoColRow('Sexe', getGenderLabel(employee.gender), 'Email', employee.email);
+    drawTwoColRow('Numéro CNPS', employee.cnps, 'Commune', employee.commune);
+    drawTwoColRow('Téléphone', employee.phone, "Nombre d'enfant", employee.number_of_children);
+    drawTwoColRow('Ville', employee.city, null, null);
+    drawTwoColRow('Situation Famille', getMaritalStatusLabel(employee.marital_status || employee.maritalStatus), null, null);
+
+    y += 5;
+
+    // === EMPLOI ===
+    drawSectionHeader('EMPLOI');
+    const deptName = employee.department_name || employee.department;
+    drawTwoColRow('Entreprise', deptName, "Date d'embauche", formatDatePDF(employee.hire_date || employee.hireDate));
+    drawOneColRow('Direction', employee.direction);
+    drawTwoColRow('Salaire', formatCurrency(employee.salary), 'Lieu de Travail', employee.city);
+    drawTwoColRow('Emploi', employee.position, null, null);
+
+    y += 5;
+
+    // === ETAT AGENT ===
+    drawSectionHeader('ETAT AGENT');
+    drawTwoColRow('Date prise de service', formatDatePDF(employee.hire_date || employee.hireDate), 'Solde Congés', (employee.leave_balance != null ? employee.leave_balance : 15) + ' jours');
+    drawTwoColRow('Date départ retraite', calcRetirementDate(birthDate), 'Congés Pris', (employee.leaves_taken_this_year || 0) + ' jours');
+    drawTwoColRow('Etat', getEmployeeStatusLabel(employee.status), null, null);
+
+    // Télécharger
+    const firstName = employee.first_name || employee.firstName || 'Employe';
+    const lastName = employee.last_name || employee.lastName || '';
+    doc.save(`Fiche_${firstName}_${lastName}.pdf`);
+}
+
+// ===========================
+// Téléchargement des rapports Excel
+// ===========================
+async function downloadReport(type) {
+    const endpoints = {
+        'attendance': API_ENDPOINTS.REPORT_ATTENDANCE,
+        'leaves': API_ENDPOINTS.REPORT_LEAVES,
+        'departments': API_ENDPOINTS.REPORT_DEPARTMENTS,
+        'complete': API_ENDPOINTS.REPORT_COMPLETE,
+    };
+
+    const labels = {
+        'attendance': 'Rapport de Présence',
+        'leaves': 'Rapport des Congés',
+        'departments': 'Rapport par Entreprise',
+        'complete': 'Rapport RH Complet',
+    };
+
+    const url = endpoints[type];
+    if (!url) {
+        alert('Type de rapport inconnu');
+        return;
+    }
+
+    // Feedback visuel : changer le bouton
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
+    btn.disabled = true;
+
+    try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erreur ${response.status}`);
+        }
+
+        // Récupérer le blob et déclencher le téléchargement
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+
+        // Extraire le nom du fichier du header Content-Disposition
+        const disposition = response.headers.get('Content-Disposition');
+        let filename = `${labels[type]}.xlsx`;
+        if (disposition) {
+            const match = disposition.match(/filename="?(.+?)"?$/);
+            if (match) filename = match[1];
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        // Feedback succès
+        btn.innerHTML = '<i class="fas fa-check"></i> Téléchargé !';
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }, 2000);
+
+    } catch (error) {
+        console.error('Erreur téléchargement rapport:', error);
+        alert(`Erreur lors du téléchargement du ${labels[type]}`);
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    }
+}
+
 // Exposer les fonctions globalement pour les événements onclick
 window.editEmployee = editEmployee;
 window.deleteEmployee = deleteEmployee;
@@ -1047,3 +1500,5 @@ window.openEmployeeModal = openEmployeeModal;
 window.openDepartmentModal = openDepartmentModal;
 window.switchAccount = switchAccount;
 window.confirmLogout = confirmLogout;
+window.downloadEmployeeProfile = downloadEmployeeProfile;
+window.downloadReport = downloadReport;

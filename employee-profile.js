@@ -5,6 +5,20 @@
 let currentEmployee = null;
 let departments = [];
 
+// Mapping Entreprise → Poste automatique
+const COMPANY_POSITION_MAP = {
+    'AZING 1': 'Secrétaire',
+    'AZING 2': 'Agent de bureau',
+    'AZING IVOIR Sarl': 'Agent de Bureau',
+    'IVOIR GARDIENNAGE': 'Vigile',
+    'NBIG SECURITE': 'Vigile',
+    'YESSIMO': 'Ouvrier',
+    'CAFOR': 'Chauffeur'
+};
+
+// Liste des directions (chargée depuis l'API)
+let DIRECTIONS = [];
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Espace Contractuel loaded');
 
@@ -19,8 +33,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function initializeApp() {
-    // Charger les entreprises/départements
+    // Charger les entreprises
     await loadCompanies();
+
+    // Charger les directions depuis l'API
+    await loadDirections();
 
     // Charger le profil de l'employé
     await loadEmployeeProfile();
@@ -53,6 +70,26 @@ async function loadCompanies() {
         }
     } catch (error) {
         console.error('Erreur chargement entreprises:', error);
+    }
+}
+
+async function loadDirections() {
+    try {
+        const response = await apiGet(API_ENDPOINTS.DIRECTIONS);
+        if (response) {
+            DIRECTIONS = response.results || response;
+            const directionSelect = document.getElementById('direction');
+            if (directionSelect) {
+                DIRECTIONS.forEach(direction => {
+                    const option = document.createElement('option');
+                    option.value = direction.name;
+                    option.textContent = direction.name;
+                    directionSelect.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Erreur chargement directions:', error);
     }
 }
 
@@ -130,16 +167,27 @@ async function loadEmployeeLeaves() {
 // ===========================
 
 function displayProfile(employee) {
-    // Informations personnelles
-    document.getElementById('viewFullName').textContent = employee.full_name || `${employee.first_name} ${employee.last_name}`;
+    const fullName = employee.full_name || `${employee.first_name} ${employee.last_name}`;
+    const matricule = employee.matricule || `EMP-${String(employee.id).padStart(5, '0')}`;
+
+    // Informations générales
+    document.getElementById('viewMatricule').textContent = matricule;
+    document.getElementById('viewFullName').textContent = fullName.toUpperCase();
     document.getElementById('viewBirthDate').textContent = formatDate(employee.birth_date) || '-';
-    document.getElementById('viewMaritalStatus').textContent = getMaritalStatusLabel(employee.marital_status) || '-';
-    document.getElementById('viewChildren').textContent = employee.number_of_children ?? '-';
+    document.getElementById('viewBirthPlace').textContent = employee.city?.toUpperCase() || '-';
+    document.getElementById('viewMaritalStatus').textContent = getMaritalStatusLabel(employee.marital_status)?.toUpperCase() || '-';
+    document.getElementById('viewChildren').textContent = employee.number_of_children ?? '0';
 
     // Âge et retraite
+    let retirementYear = null;
+    let retirementDate = null;
     if (employee.birth_date) {
         const age = calculateAge(employee.birth_date);
-        const retirementYear = calculateRetirementYear(employee.birth_date);
+        retirementYear = calculateRetirementYear(employee.birth_date);
+        // Calculer la date exacte de retraite (anniversaire des 60 ans)
+        const birthDate = new Date(employee.birth_date);
+        retirementDate = new Date(birthDate.setFullYear(birthDate.getFullYear() + 60));
+
         document.getElementById('viewAge').textContent = age ? `${age} ans` : '-';
         document.getElementById('viewRetirementYear').textContent = retirementYear || '-';
     } else {
@@ -148,23 +196,99 @@ function displayProfile(employee) {
     }
 
     // Sexe
-    document.getElementById('viewGender').textContent = getGenderLabel(employee.gender) || '-';
+    document.getElementById('viewGender').textContent = getGenderLabel(employee.gender)?.toUpperCase() || '-';
 
     // Coordonnées
     document.getElementById('viewEmail').textContent = employee.email || '-';
     document.getElementById('viewPhone').textContent = employee.phone || '-';
-    document.getElementById('viewCity').textContent = employee.city || '-';
-    document.getElementById('viewCommune').textContent = employee.commune || '-';
-
-    // Informations professionnelles
-    document.getElementById('viewCompany').textContent = employee.department_name || getDepartmentName(employee.department) || '-';
-    document.getElementById('viewPosition').textContent = employee.position || '-';
-    document.getElementById('viewHireDate').textContent = formatDate(employee.hire_date) || '-';
-    document.getElementById('viewSalary').textContent = employee.salary ? formatCurrency(employee.salary) : '-';
+    document.getElementById('viewCity').textContent = employee.city?.toUpperCase() || '-';
+    document.getElementById('viewCommune').textContent = employee.commune?.toUpperCase() || '-';
     document.getElementById('viewCNPS').textContent = employee.cnps || '-';
 
+    // Informations professionnelles (EMPLOI)
+    document.getElementById('viewCompany').textContent = (employee.department_name || getDepartmentName(employee.department) || '-').toUpperCase();
+    document.getElementById('viewDirection').textContent = employee.direction?.toUpperCase() || '-';
+    document.getElementById('viewPosition').textContent = employee.position?.toUpperCase() || '-';
+    document.getElementById('viewHireDate').textContent = formatDate(employee.hire_date) || '-';
+    document.getElementById('viewSalary').textContent = employee.salary ? formatCurrency(employee.salary) : '-';
+
+    // Lieu de travail (duplicata de ville)
+    const viewCity2 = document.getElementById('viewCity2');
+    if (viewCity2) {
+        viewCity2.textContent = employee.city?.toUpperCase() || '-';
+    }
+
+    // ETAT AGENT
+    const viewServiceDate = document.getElementById('viewServiceDate');
+    if (viewServiceDate) {
+        viewServiceDate.textContent = formatDate(employee.hire_date) || '-';
+    }
+
+    const viewRetirementDate = document.getElementById('viewRetirementDate');
+    if (viewRetirementDate && retirementDate) {
+        viewRetirementDate.textContent = formatDate(retirementDate.toISOString().split('T')[0]) || '-';
+    }
+
+    const viewStatus = document.getElementById('viewStatus');
+    if (viewStatus) {
+        const statusText = employee.status === 'active' ? 'PRÉSENT ET PAYÉ' : 'INACTIF';
+        viewStatus.textContent = statusText;
+    }
+
+    // Photo de profil avec matricule
+    const viewPhotoImg = document.getElementById('viewPhotoImg');
+    const viewPhotoMatricule = document.getElementById('viewPhotoMatricule');
+    if (viewPhotoImg) {
+        if (employee.photo) {
+            viewPhotoImg.innerHTML = `<img src="${employee.photo}" alt="Photo">`;
+        } else {
+            viewPhotoImg.innerHTML = `<i class="fas fa-user"></i>`;
+        }
+    }
+    if (viewPhotoMatricule) {
+        viewPhotoMatricule.textContent = matricule;
+    }
+
+    // Documents d'identité
+    const viewPhoto = document.getElementById('viewPhoto');
+    if (viewPhoto) {
+        if (employee.photo) {
+            viewPhoto.innerHTML = `<a href="${employee.photo}" target="_blank" class="btn btn-sm btn-success"><i class="fas fa-eye"></i> Voir</a>`;
+        } else {
+            viewPhoto.innerHTML = `<span class="cnps-no-doc">Non téléchargée</span>`;
+        }
+    }
+
+    const viewCniRecto = document.getElementById('viewCniRecto');
+    if (viewCniRecto) {
+        if (employee.cni_recto) {
+            viewCniRecto.innerHTML = `<a href="${employee.cni_recto}" target="_blank" class="btn btn-sm btn-success"><i class="fas fa-eye"></i> Voir</a>`;
+        } else {
+            viewCniRecto.innerHTML = `<span class="cnps-no-doc">Non téléchargé</span>`;
+        }
+    }
+
+    const viewCniVerso = document.getElementById('viewCniVerso');
+    if (viewCniVerso) {
+        if (employee.cni_verso) {
+            viewCniVerso.innerHTML = `<a href="${employee.cni_verso}" target="_blank" class="btn btn-sm btn-success"><i class="fas fa-eye"></i> Voir</a>`;
+        } else {
+            viewCniVerso.innerHTML = `<span class="cnps-no-doc">Non téléchargé</span>`;
+        }
+    }
+
+    // Situation congés
+    const viewLeavesTaken = document.getElementById('viewLeavesTaken');
+    const viewLeaveBalance = document.getElementById('viewLeaveBalance');
+    if (viewLeavesTaken) {
+        viewLeavesTaken.textContent = `${employee.leaves_taken_this_year || 0} jours`;
+    }
+    if (viewLeaveBalance) {
+        viewLeaveBalance.textContent = `${employee.leave_balance || 30} jours`;
+    }
+
     // Mettre à jour le nom dans la sidebar
-    document.getElementById('employeeName').textContent = employee.full_name || `${employee.first_name} ${employee.last_name}`;
+    document.getElementById('employeeName').textContent = fullName;
 }
 
 function fillEditForm(employee) {
@@ -185,9 +309,20 @@ function fillEditForm(employee) {
     document.getElementById('city').value = employee.city || '';
     document.getElementById('commune').value = employee.commune || '';
     document.getElementById('company').value = employee.department || '';
+    document.getElementById('direction').value = employee.direction || '';
     document.getElementById('position').value = employee.position || '';
+
+    // Verrouiller le poste si l'entreprise a un poste prédéfini
+    const companySelect = document.getElementById('company');
+    const positionInput = document.getElementById('position');
+    if (companySelect && positionInput) {
+        const selectedOption = companySelect.options[companySelect.selectedIndex];
+        const companyName = selectedOption ? selectedOption.textContent.trim() : '';
+        positionInput.readOnly = !!COMPANY_POSITION_MAP[companyName];
+    }
     document.getElementById('hireDate').value = employee.hire_date || '';
     document.getElementById('salary').value = employee.salary || '';
+    document.getElementById('matricule').value = employee.matricule || '';
     document.getElementById('cnpsNumber').value = employee.cnps || '';
 
     // Afficher la photo existante
@@ -196,16 +331,31 @@ function fillEditForm(employee) {
         photoPreview.innerHTML = `<img src="${employee.photo}" alt="Photo">`;
     }
 
-    // Afficher la CNI existante
-    const cniPreview = document.getElementById('cniPreview');
-    if (employee.cni_document && cniPreview) {
-        cniPreview.classList.add('has-file');
-        const fileName = employee.cni_document.split('/').pop();
-        const isPdf = employee.cni_document.endsWith('.pdf');
-        cniPreview.innerHTML = `
+    // Afficher la CNI Recto existante
+    const cniRectoPreview = document.getElementById('cniRectoPreview');
+    if (employee.cni_recto && cniRectoPreview) {
+        cniRectoPreview.classList.add('has-file');
+        const fileName = employee.cni_recto.split('/').pop();
+        const isPdf = employee.cni_recto.endsWith('.pdf');
+        cniRectoPreview.innerHTML = `
             <i class="fas ${isPdf ? 'fa-file-pdf' : 'fa-image'}"></i>
             <span>${fileName}</span>
-            <a href="${employee.cni_document}" target="_blank" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">
+            <a href="${employee.cni_recto}" target="_blank" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">
+                <i class="fas fa-eye"></i> Voir
+            </a>
+        `;
+    }
+
+    // Afficher la CNI Verso existante
+    const cniVersoPreview = document.getElementById('cniVersoPreview');
+    if (employee.cni_verso && cniVersoPreview) {
+        cniVersoPreview.classList.add('has-file');
+        const fileName = employee.cni_verso.split('/').pop();
+        const isPdf = employee.cni_verso.endsWith('.pdf');
+        cniVersoPreview.innerHTML = `
+            <i class="fas ${isPdf ? 'fa-file-pdf' : 'fa-image'}"></i>
+            <span>${fileName}</span>
+            <a href="${employee.cni_verso}" target="_blank" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">
                 <i class="fas fa-eye"></i> Voir
             </a>
         `;
@@ -242,7 +392,7 @@ function displayLeaves(leaves) {
 function updateLeaveStats(leaves) {
     // Statistiques des demandes
     document.getElementById('totalLeaves').textContent = leaves.length;
-    document.getElementById('pendingLeaves').textContent = leaves.filter(l => l.status === 'pending').length;
+    document.getElementById('pendingLeaves').textContent = leaves.filter(l => l.status === 'pending' || l.status === 'manager_approved').length;
 
     // Mise à jour du solde de congés depuis les données de l'employé
     if (currentEmployee) {
@@ -327,8 +477,19 @@ function setupEventListeners() {
     document.getElementById('downloadProfileBtn')?.addEventListener('click', generateProfilePDF);
 
     // Menu mobile
-    document.getElementById('mobileToggle')?.addEventListener('click', function() {
-        document.getElementById('employeeSidebar')?.classList.toggle('open');
+    const mobileToggle = document.getElementById('mobileToggle');
+    const sidebar = document.getElementById('employeeSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    mobileToggle?.addEventListener('click', function() {
+        sidebar?.classList.toggle('open');
+        sidebarOverlay?.classList.toggle('active');
+    });
+
+    // Fermer le sidebar en cliquant sur l'overlay
+    sidebarOverlay?.addEventListener('click', function() {
+        sidebar?.classList.remove('open');
+        sidebarOverlay?.classList.remove('active');
     });
 
     // Gestion des fichiers - Photo d'identité
@@ -336,14 +497,33 @@ function setupEventListeners() {
         handleFilePreview(e.target, 'photoPreview', true);
     });
 
-    // Gestion des fichiers - CNI
-    document.getElementById('cniDocument')?.addEventListener('change', function(e) {
-        handleFilePreview(e.target, 'cniPreview', false);
+    // Gestion des fichiers - CNI Recto
+    document.getElementById('cniRecto')?.addEventListener('change', function(e) {
+        handleFilePreview(e.target, 'cniRectoPreview', false);
+    });
+
+    // Gestion des fichiers - CNI Verso
+    document.getElementById('cniVerso')?.addEventListener('change', function(e) {
+        handleFilePreview(e.target, 'cniVersoPreview', false);
     });
 
     // Validation de la date de naissance et calcul de la retraite
     document.getElementById('birthDate')?.addEventListener('change', function(e) {
         handleBirthDateChange(e.target.value);
+    });
+
+    // Remplissage automatique du poste selon l'entreprise choisie
+    document.getElementById('company')?.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const companyName = selectedOption ? selectedOption.textContent.trim() : '';
+        const positionInput = document.getElementById('position');
+        if (positionInput && COMPANY_POSITION_MAP[companyName]) {
+            positionInput.value = COMPANY_POSITION_MAP[companyName];
+            positionInput.readOnly = true;
+        } else if (positionInput) {
+            positionInput.value = '';
+            positionInput.readOnly = false;
+        }
     });
 }
 
@@ -435,15 +615,20 @@ async function handleProfileSubmit(e) {
 
     // Valider les fichiers obligatoires pour les nouveaux employés
     const photoInput = document.getElementById('photo');
-    const cniInput = document.getElementById('cniDocument');
+    const cniRectoInput = document.getElementById('cniRecto');
+    const cniVersoInput = document.getElementById('cniVerso');
 
     if (isNewEmployee) {
         if (!photoInput.files[0]) {
             showNotification('La photo d\'identité est obligatoire', 'error');
             return;
         }
-        if (!cniInput.files[0]) {
-            showNotification('La Carte Nationale d\'Identité est obligatoire', 'error');
+        if (!cniRectoInput.files[0]) {
+            showNotification('Le recto de la CNI est obligatoire', 'error');
+            return;
+        }
+        if (!cniVersoInput.files[0]) {
+            showNotification('Le verso de la CNI est obligatoire', 'error');
             return;
         }
     }
@@ -458,6 +643,7 @@ async function handleProfileSubmit(e) {
     formData.append('position', document.getElementById('position').value);
     formData.append('hire_date', document.getElementById('hireDate').value);
     formData.append('department', document.getElementById('company').value);
+    formData.append('direction', document.getElementById('direction').value);
     formData.append('status', 'active');
 
     // Champs obligatoires
@@ -468,6 +654,7 @@ async function handleProfileSubmit(e) {
     formData.append('phone', document.getElementById('phone').value);
     formData.append('city', document.getElementById('city').value);
     formData.append('salary', document.getElementById('salary').value);
+    formData.append('matricule', document.getElementById('matricule').value);
     formData.append('cnps', document.getElementById('cnpsNumber').value);
 
     // Champ optionnel: commune
@@ -480,14 +667,16 @@ async function handleProfileSubmit(e) {
     }
 
     // Ajouter les fichiers s'ils sont sélectionnés
-    const photoInput = document.getElementById('photo');
     if (photoInput.files[0]) {
         formData.append('photo', photoInput.files[0]);
     }
 
-    const cniInput = document.getElementById('cniDocument');
-    if (cniInput.files[0]) {
-        formData.append('cni_document', cniInput.files[0]);
+    if (cniRectoInput.files[0]) {
+        formData.append('cni_recto', cniRectoInput.files[0]);
+    }
+
+    if (cniVersoInput.files[0]) {
+        formData.append('cni_verso', cniVersoInput.files[0]);
     }
 
     console.log('Envoi du formulaire avec fichiers');
@@ -706,6 +895,7 @@ function getLeaveTypeLabel(type) {
 function getStatusLabel(status) {
     const labels = {
         'pending': 'En attente',
+        'manager_approved': 'Validé Manager',
         'approved': 'Approuvé',
         'rejected': 'Rejeté'
     };
@@ -755,7 +945,7 @@ function showNotification(message, type = 'info') {
 }
 
 // ===========================
-// Génération du PDF du profil
+// Génération du PDF du profil (Style CNPS)
 // ===========================
 
 async function generateProfilePDF() {
@@ -764,166 +954,221 @@ async function generateProfilePDF() {
         return;
     }
 
-    // Afficher un indicateur de chargement
     const downloadBtn = document.getElementById('downloadProfileBtn');
     const originalBtnText = downloadBtn.innerHTML;
     downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
     downloadBtn.disabled = true;
 
     try {
-        // Récupérer jsPDF
+        const emp = currentEmployee;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // Configuration
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 20;
-        let y = 20;
+        const pageWidth = 210;
+        const marginL = 10;
+        const contentW = 190;
+        let y = 10;
+        const rowH = 10;
 
-        // Couleurs
-        const primaryColor = [196, 69, 54]; // Terracotta
-        const darkColor = [30, 30, 30];
-        const grayColor = [100, 100, 100];
+        // Couleurs CNPS
+        const green = [56, 118, 29];
+        const valueColor = [56, 142, 60];
+        const border = [180, 180, 180];
+        const black = [0, 0, 0];
 
-        // En-tête
-        doc.setFillColor(...primaryColor);
-        doc.rect(0, 0, pageWidth, 40, 'F');
+        function getEmployeeStatusLabel(status) {
+            const labels = { 'active': 'Présent et Payé', 'inactive': 'Absent', 'on_leave': 'En Congé' };
+            return labels[status] || status || '-';
+        }
 
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(24);
-        doc.setFont('helvetica', 'bold');
-        doc.text('FICHE EMPLOYÉ', pageWidth / 2, 25, { align: 'center' });
+        function calcRetirementDate(bd) {
+            if (!bd) return '-';
+            const b = new Date(bd);
+            const r = new Date(b);
+            r.setFullYear(r.getFullYear() + 60);
+            return r.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
 
-        y = 55;
+        // Nettoyage des caractères spéciaux pour jsPDF
+        function clean(str) {
+            return String(str || '-').replace(/[\u00A0\u202F\u2009\u200B]/g, ' ');
+        }
 
-        // Photo de l'employé (si disponible)
-        const fullName = currentEmployee.full_name || `${currentEmployee.first_name} ${currentEmployee.last_name}`;
+        // === Fonctions de dessin ===
+        function drawSectionHeader(title) {
+            if (y > 270) { doc.addPage(); y = 10; }
+            doc.setFillColor(...green);
+            doc.rect(marginL, y, contentW, 12, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('  ' + title, marginL + 3, y + 8.5);
+            y += 12;
+        }
 
-        if (currentEmployee.photo) {
+        function drawInfoRow(label, value, labelW, totalW) {
+            if (y > 280) { doc.addPage(); y = 10; }
+            doc.setDrawColor(...border);
+            doc.setLineWidth(0.3);
+            doc.rect(marginL, y, labelW, rowH);
+            doc.setTextColor(...black);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(label + ' :', marginL + 3, y + 7);
+            doc.rect(marginL + labelW, y, totalW - labelW, rowH);
+            doc.setTextColor(...valueColor);
+            doc.setFont('helvetica', 'normal');
+            doc.text(clean(value).toUpperCase(), marginL + labelW + 3, y + 7);
+            y += rowH;
+        }
+
+        function fitValue(text, maxW) {
+            doc.setFontSize(10);
+            if (doc.getTextWidth(text) <= maxW) return;
+            doc.setFontSize(8);
+            if (doc.getTextWidth(text) <= maxW) return;
+            doc.setFontSize(7);
+        }
+
+        function drawOneColRow(label, value) {
+            if (y > 280) { doc.addPage(); y = 10; }
+            const lw = 45;
+            const maxValW = contentW - lw - 3;
+            doc.setDrawColor(...border);
+            doc.setLineWidth(0.3);
+            doc.rect(marginL, y, contentW, rowH);
+            doc.setTextColor(...black);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(label + ' :', marginL + 3, y + 7);
+            doc.setTextColor(...valueColor);
+            doc.setFont('helvetica', 'normal');
+            let v = clean(value).toUpperCase();
+            fitValue(v, maxValW);
+            doc.text(v, marginL + lw, y + 7, { maxWidth: maxValW });
+            doc.setFontSize(10);
+            y += rowH;
+        }
+
+        function drawTwoColRow(label1, value1, label2, value2) {
+            if (y > 280) { doc.addPage(); y = 10; }
+            const halfW = contentW / 2;
+            const lw = 45;
+            const maxValW = halfW - lw - 3;
+            doc.setDrawColor(...border);
+            doc.setLineWidth(0.3);
+
+            doc.rect(marginL, y, halfW, rowH);
+            doc.setTextColor(...black);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(label1 + ' :', marginL + 3, y + 7);
+            doc.setTextColor(...valueColor);
+            doc.setFont('helvetica', 'normal');
+            let v1 = clean(value1).toUpperCase();
+            fitValue(v1, maxValW);
+            doc.text(v1, marginL + lw, y + 7, { maxWidth: maxValW });
+            doc.setFontSize(10);
+
+            doc.rect(marginL + halfW, y, halfW, rowH);
+            if (label2) {
+                doc.setTextColor(...black);
+                doc.setFont('helvetica', 'bold');
+                doc.text(label2 + ' :', marginL + halfW + 3, y + 7);
+                doc.setTextColor(...valueColor);
+                doc.setFont('helvetica', 'normal');
+                let v2 = clean(value2).toUpperCase();
+                fitValue(v2, maxValW);
+                doc.text(v2, marginL + halfW + lw, y + 7, { maxWidth: maxValW });
+                doc.setFontSize(10);
+            } else {
+                doc.setTextColor(...valueColor);
+                doc.text('-', marginL + halfW + 3, y + 7);
+            }
+            y += rowH;
+        }
+
+        // === INFORMATIONS GÉNÉRALES ===
+        drawSectionHeader('INFORMATIONS GÉNÉRALES');
+
+        const infoLabelW = 48;
+        const infoTotalW = 120;
+        const photoAreaX = marginL + infoTotalW;
+        const photoAreaW = contentW - infoTotalW;
+        const infoStartY = y;
+
+        const matricule = emp.matricule || '-';
+        const fullName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
+        const birthDate = emp.birth_date;
+        const age = calculateAge(birthDate);
+        const retirementYear = calculateRetirementYear(birthDate);
+
+        drawInfoRow('Matricule', matricule, infoLabelW, infoTotalW);
+        drawInfoRow('Nom et Prénoms', fullName, infoLabelW, infoTotalW);
+        drawInfoRow('Date de Naissance', formatDate(birthDate) || '-', infoLabelW, infoTotalW);
+        drawInfoRow('Lieu de Naissance', emp.birth_place || '-', infoLabelW, infoTotalW);
+        drawInfoRow('Âge actuel', age ? `${age} ans` : '-', infoLabelW, infoTotalW);
+        drawInfoRow('Année de Retraite', retirementYear || '-', infoLabelW, infoTotalW);
+
+        // Zone photo (côté droit)
+        const infoEndY = y;
+        doc.setDrawColor(...border);
+        doc.setLineWidth(0.3);
+        doc.rect(photoAreaX, infoStartY, photoAreaW, infoEndY - infoStartY);
+
+        if (emp.photo) {
             try {
-                // Charger l'image et la convertir en base64
-                const imgData = await loadImageAsBase64(currentEmployee.photo);
+                const imgData = await loadImageAsBase64(emp.photo);
                 if (imgData) {
-                    // Ajouter la photo (centrée, taille 35x45 mm - format photo d'identité)
-                    const photoWidth = 35;
-                    const photoHeight = 45;
-                    const photoX = (pageWidth - photoWidth) / 2;
-
-                    // Ajouter un cadre blanc autour de la photo
-                    doc.setFillColor(255, 255, 255);
-                    doc.roundedRect(photoX - 2, y - 2, photoWidth + 4, photoHeight + 4, 2, 2, 'F');
-
-                    // Ajouter l'image
-                    doc.addImage(imgData, 'JPEG', photoX, y, photoWidth, photoHeight);
-
-                    y += photoHeight + 10;
+                    const photoW = 35;
+                    const photoH = 40;
+                    const photoX = photoAreaX + (photoAreaW - photoW) / 2;
+                    const photoY = infoStartY + 2;
+                    doc.addImage(imgData, 'JPEG', photoX, photoY, photoW, photoH);
+                    doc.setTextColor(...black);
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(String(matricule), photoAreaX + photoAreaW / 2, infoEndY - 2, { align: 'center' });
                 }
-            } catch (photoError) {
-                console.error('Erreur chargement photo:', photoError);
-                // Continuer sans la photo si elle ne peut pas être chargée
+            } catch (e) {
+                console.error('Erreur chargement photo:', e);
             }
         }
 
-        // Nom de l'employé
-        doc.setTextColor(...darkColor);
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text(fullName, pageWidth / 2, y, { align: 'center' });
-        y += 10;
+        y += 5;
 
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...grayColor);
-        doc.text(currentEmployee.position || 'Poste non défini', pageWidth / 2, y, { align: 'center' });
-        y += 20;
+        // === Détails personnels (deux colonnes) ===
+        drawTwoColRow('Sexe', getGenderLabel(emp.gender), 'Email', emp.email);
+        drawTwoColRow('Numéro CNPS', emp.cnps, 'Commune', emp.commune);
+        drawTwoColRow('Téléphone', emp.phone, "Nombre d'enfant", emp.number_of_children);
+        drawTwoColRow('Ville', emp.city, null, null);
+        drawTwoColRow('Situation Famille', getMaritalStatusLabel(emp.marital_status), null, null);
 
-        // Fonction pour ajouter une section
-        function addSection(title, data) {
-            // Titre de section
-            doc.setFillColor(...primaryColor);
-            doc.rect(margin, y, pageWidth - 2 * margin, 8, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(11);
-            doc.setFont('helvetica', 'bold');
-            doc.text(title, margin + 3, y + 6);
-            y += 12;
+        y += 5;
 
-            // Données
-            doc.setTextColor(...darkColor);
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
+        // === EMPLOI ===
+        drawSectionHeader('EMPLOI');
+        const deptName = emp.department_name || getDepartmentName(emp.department);
+        drawTwoColRow('Entreprise', deptName, "Date d'embauche", formatDate(emp.hire_date));
+        drawOneColRow('Direction', emp.direction);
+        drawTwoColRow('Salaire', formatCurrency(emp.salary), 'Lieu de Travail', emp.city);
+        drawTwoColRow('Emploi', emp.position, null, null);
 
-            data.forEach(item => {
-                doc.setFont('helvetica', 'bold');
-                doc.text(item.label + ' :', margin, y);
-                doc.setFont('helvetica', 'normal');
-                doc.text(item.value || '-', margin + 55, y);
-                y += 7;
-            });
+        y += 5;
 
-            y += 5;
-        }
+        // === ETAT AGENT ===
+        drawSectionHeader('ETAT AGENT');
+        drawTwoColRow('Date prise de service', formatDate(emp.hire_date), 'Solde Congés', (emp.leave_balance != null ? emp.leave_balance : 15) + ' jours');
+        drawTwoColRow('Date départ retraite', calcRetirementDate(birthDate), 'Congés Pris', (emp.leaves_taken_this_year || 0) + ' jours');
+        drawTwoColRow('Etat', getEmployeeStatusLabel(emp.status), null, null);
 
-        // Section: Informations personnelles
-        const age = calculateAge(currentEmployee.birth_date);
-        const retirementYear = calculateRetirementYear(currentEmployee.birth_date);
-        addSection('INFORMATIONS PERSONNELLES', [
-            { label: 'Nom complet', value: fullName },
-            { label: 'Date de naissance', value: formatDate(currentEmployee.birth_date) },
-            { label: 'Âge actuel', value: age ? `${age} ans` : '-' },
-            { label: 'Sexe', value: getGenderLabel(currentEmployee.gender) || '-' },
-            { label: 'Situation matrimoniale', value: getMaritalStatusLabel(currentEmployee.marital_status) },
-            { label: 'Nombre d\'enfants', value: String(currentEmployee.number_of_children || 0) },
-            { label: 'Année de retraite', value: retirementYear ? String(retirementYear) : '-' }
-        ]);
-
-        // Section: Coordonnées
-        addSection('COORDONNÉES', [
-            { label: 'Email', value: currentEmployee.email },
-            { label: 'Téléphone', value: currentEmployee.phone },
-            { label: 'Ville', value: currentEmployee.city },
-            { label: 'Commune', value: currentEmployee.commune }
-        ]);
-
-        // Section: Informations professionnelles
-        const deptName = currentEmployee.department_name || getDepartmentName(currentEmployee.department);
-        addSection('INFORMATIONS PROFESSIONNELLES', [
-            { label: 'Entreprise', value: deptName },
-            { label: 'Poste', value: currentEmployee.position },
-            { label: 'Date d\'embauche', value: formatDate(currentEmployee.hire_date) },
-            { label: 'Salaire', value: currentEmployee.salary ? formatCurrency(currentEmployee.salary) : '-' },
-            { label: 'Numéro CNPS', value: currentEmployee.cnps }
-        ]);
-
-        // Section: Congés
-        addSection('SITUATION CONGÉS', [
-            { label: 'Quota annuel', value: '30 jours' },
-            { label: 'Jours pris', value: String(currentEmployee.leaves_taken_this_year || 0) + ' jours' },
-            { label: 'Jours restants', value: String(currentEmployee.leave_balance || 30) + ' jours' }
-        ]);
-
-        // Pied de page
-        const today = new Date().toLocaleDateString('fr-FR', {
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric'
-        });
-
-        doc.setFontSize(9);
-        doc.setTextColor(...grayColor);
-        doc.text(`Document généré le ${today}`, margin, 280);
-        doc.text('EmpManager - Système de Gestion du Personnel', pageWidth - margin, 280, { align: 'right' });
-
-        // Télécharger le PDF
-        const fileName = `Profil_${currentEmployee.first_name}_${currentEmployee.last_name}.pdf`;
-        doc.save(fileName);
-
+        // Télécharger
+        doc.save(`Fiche_${emp.first_name || 'Employe'}_${emp.last_name || ''}.pdf`);
         showNotification('Profil téléchargé avec succès !', 'success');
     } catch (error) {
         console.error('Erreur génération PDF:', error);
         showNotification('Erreur lors de la génération du PDF', 'error');
     } finally {
-        // Restaurer le bouton
         downloadBtn.innerHTML = originalBtnText;
         downloadBtn.disabled = false;
     }

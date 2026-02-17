@@ -14,7 +14,10 @@ const API_ENDPOINTS = {
     // Dashboard
     DASHBOARD_STATS: `${API_BASE_URL}/dashboard/stats/`,
 
-    // Départements
+    // Directions
+    DIRECTIONS: `${API_BASE_URL}/directions/`,
+
+    // Entreprises
     DEPARTMENTS: `${API_BASE_URL}/departments/`,
     DEPARTMENT_DETAIL: (id) => `${API_BASE_URL}/departments/${id}/`,
     DEPARTMENT_EMPLOYEES: (id) => `${API_BASE_URL}/departments/${id}/employees/`,
@@ -36,6 +39,13 @@ const API_ENDPOINTS = {
     ATTENDANCE_DETAIL: (id) => `${API_BASE_URL}/attendances/${id}/`,
     ATTENDANCES_TODAY: `${API_BASE_URL}/attendances/today/`,
     ATTENDANCES_BY_EMPLOYEE: `${API_BASE_URL}/attendances/by_employee/`,
+
+    // Rapports
+    REPORT_ATTENDANCE: `${API_BASE_URL}/reports/attendance/`,
+    REPORT_LEAVES: `${API_BASE_URL}/reports/leaves/`,
+    REPORT_DEPARTMENTS: `${API_BASE_URL}/reports/departments/`,
+    REPORT_COMPLETE: `${API_BASE_URL}/reports/complete/`,
+
 };
 
 // ===========================

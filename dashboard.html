@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - EmpManager</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bibliothèque pour générer des PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <!-- Dashboard principal -->
@@ -42,16 +44,7 @@
                     <span>Rapports</span>
                 </a>
             </nav>
-            <div class="sidebar-footer">
-                <div class="user-info">
-                    <div class="user-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div class="user-details">
-                        <p class="user-name" id="currentUserName">Utilisateur</p>
-                        <p class="user-role" id="currentUserRole">Rôle</p>
-                    </div>
-                </div>
+            <div class="sidebar-logout">
                 <button class="btn btn-logout" id="logoutBtn">
                     <i class="fas fa-sign-out-alt"></i>
                     Déconnexion
@@ -68,25 +61,15 @@
                 <button class="mobile-menu-btn" id="mobileMenuBtn">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div class="search-bar">
-                    <i class="fas fa-search"></i>
-                    <input type="text" placeholder="Rechercher..." id="globalSearch">
+                <div class="top-bar-title">
+                    <h1 id="pageTitle">Tableau de bord</h1>
                 </div>
-                <div class="top-bar-actions">
-                    <button class="icon-btn" title="Notifications">
-                        <i class="fas fa-bell"></i>
-                        <span class="badge">3</span>
-                    </button>
-                    <button class="icon-btn" title="Messages">
-                        <i class="fas fa-envelope"></i>
-                        <span class="badge">5</span>
-                    </button>
-                    <button class="icon-btn" title="Paramètres">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                    <button class="icon-btn icon-btn-logout" id="logoutBtnTop" title="Déconnexion">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                <div class="top-bar-user">
+                    <i class="fas fa-user-circle"></i>
+                    <div class="top-bar-user-info">
+                        <span class="top-bar-user-name" id="currentUserName">Utilisateur</span>
+                        <span class="top-bar-user-role" id="currentUserRole">Rôle</span>
+                    </div>
                 </div>
             </header>
 
@@ -113,7 +96,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3 id="totalDepartments">0</h3>
-                                <p>Départements</p>
+                                <p>Entreprises</p>
                             </div>
                         </div>
                         <div class="stat-card">
@@ -225,7 +208,7 @@
                     </div>
                 </section>
 
-                <!-- Section Départements -->
+                <!-- Section Entreprises -->
                 <section id="departmentsSection" class="content-section">
                     <div class="section-header">
                         <div>
@@ -256,6 +239,7 @@
                     </div>
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="pending">En attente</button>
+                        <button class="tab-btn" data-tab="manager_approved">Validé Manager</button>
                         <button class="tab-btn" data-tab="approved">Approuvés</button>
                         <button class="tab-btn" data-tab="rejected">Rejetés</button>
                         <button class="tab-btn" data-tab="all">Tous</button>
@@ -369,7 +353,7 @@
                         <div class="report-card">
                             <h3>Rapport de Présence</h3>
                             <p>Statistiques mensuelles des présences</p>
-                            <button class="btn btn-secondary">
+                            <button class="btn btn-secondary" onclick="downloadReport('attendance')">
                                 <i class="fas fa-download"></i>
                                 Télécharger
                             </button>
@@ -377,15 +361,15 @@
                         <div class="report-card">
                             <h3>Rapport des Congés</h3>
                             <p>Analyse des demandes de congés</p>
-                            <button class="btn btn-secondary">
+                            <button class="btn btn-secondary" onclick="downloadReport('leaves')">
                                 <i class="fas fa-download"></i>
                                 Télécharger
                             </button>
                         </div>
                         <div class="report-card">
-                            <h3>Rapport par Département</h3>
-                            <p>Performance par département</p>
-                            <button class="btn btn-secondary">
+                            <h3>Rapport par Entreprise</h3>
+                            <p>Performance par entreprise</p>
+                            <button class="btn btn-secondary" onclick="downloadReport('departments')">
                                 <i class="fas fa-download"></i>
                                 Télécharger
                             </button>
@@ -393,7 +377,7 @@
                         <div class="report-card">
                             <h3>Rapport RH Complet</h3>
                             <p>Rapport mensuel complet</p>
-                            <button class="btn btn-secondary">
+                            <button class="btn btn-secondary" onclick="downloadReport('complete')">
                                 <i class="fas fa-download"></i>
                                 Télécharger
                             </button>
@@ -434,7 +418,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="empDepartment">Département *</label>
+                        <label for="empDepartment">Entreprise *</label>
                         <select id="empDepartment" required>
                             <option value="">Sélectionner...</option>
                         </select>
@@ -456,9 +440,15 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
+                        <label for="empMatricule">Matricule</label>
+                        <input type="text" id="empMatricule" placeholder="Ex: MAT-001">
+                    </div>
+                    <div class="form-group">
                         <label for="empCNPS">Numéro CNPS</label>
                         <input type="text" id="empCNPS" placeholder="Ex: 123456789">
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label for="empAddress">Adresse</label>
                         <input type="text" id="empAddress">
@@ -476,16 +466,16 @@
         </div>
     </div>
 
-    <!-- Modal Département -->
+    <!-- Modal Entreprise -->
     <div id="departmentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="departmentModalTitle">Ajouter un Département</h3>
+                <h3 id="departmentModalTitle">Ajouter un Entreprise</h3>
                 <button class="close-modal">&times;</button>
             </div>
             <form id="departmentForm">
                 <div class="form-group">
-                    <label for="deptName">Nom du Département *</label>
+                    <label for="deptName">Nom du Entreprise *</label>
                     <input type="text" id="deptName" required>
                 </div>
                 <div class="form-group">
@@ -661,7 +651,7 @@
         </div>
     </div>
 
-    <script src="api-config.js"></script>
-    <script src="dashboard.js"></script>
+    <script src="api-config.js?v=2"></script>
+    <script src="dashboard.js?v=2"></script>
 </body>
 </html>

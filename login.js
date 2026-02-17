@@ -116,10 +116,9 @@ async function handleLogin(e) {
 
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const role = document.getElementById('userRole').value;
 
     // Validation
-    if (!username || !password || !role) {
+    if (!username || !password) {
         showError('Veuillez remplir tous les champs.');
         return;
     }
@@ -136,7 +135,7 @@ async function handleLogin(e) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ username, password, role })
+            body: JSON.stringify({ username, password })
         });
 
         const data = await response.json();
@@ -145,17 +144,23 @@ async function handleLogin(e) {
             // Stocker les tokens et les infos utilisateur
             storeAuthData(data);
 
-            // Stocker le rôle dans currentUser
+            // Déterminer le rôle basé sur les informations utilisateur retournées
+            const userRole = data.user?.role || 'employee';
+
+            // Stocker le rôle et les directions dans currentUser
             const currentUser = getCurrentUser();
             if (currentUser) {
-                currentUser.role = role;
+                currentUser.role = userRole;
+                currentUser.managed_directions = data.user?.managed_directions || [];
                 sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
             }
 
-            // Rediriger selon le rôle
-            if (role === 'employee') {
+            // Rediriger en fonction du rôle
+            if (userRole === 'employee') {
+                // Les employés vont vers l'espace contractuel (profil)
                 window.location.href = 'employee-profile.html';
             } else {
+                // Les managers et admins vont vers le dashboard
                 window.location.href = 'dashboard.html';
             }
         } else {
