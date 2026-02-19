@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from django.contrib.auth.models import User
 from api.models import PasswordRecord, Employee
+from api.encryption import decrypt_password
 
 wb = Workbook()
 ws = wb.active
@@ -91,7 +92,7 @@ for idx, record in enumerate(records, 1):
         idx,
         full_name.upper(),
         record.user.username,
-        record.password_plain,
+        record.get_password(),
         role_labels.get(record.role, record.role),
         dept_name,
         direction,

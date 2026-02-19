@@ -412,8 +412,8 @@
                         <input type="email" id="empEmail" required>
                     </div>
                     <div class="form-group">
-                        <label for="empPhone">Téléphone</label>
-                        <input type="tel" id="empPhone">
+                        <label for="empPhone">Téléphone *</label>
+                        <input type="tel" id="empPhone" required>
                     </div>
                 </div>
                 <div class="form-row">
@@ -434,24 +434,24 @@
                         <input type="date" id="empHireDate" required>
                     </div>
                     <div class="form-group">
-                        <label for="empSalary">Salaire</label>
-                        <input type="number" id="empSalary" min="0">
+                        <label for="empSalary">Salaire *</label>
+                        <input type="number" id="empSalary" min="0" required>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="empMatricule">Matricule</label>
-                        <input type="text" id="empMatricule" placeholder="Ex: MAT-001">
+                        <label for="empMatricule">Matricule *</label>
+                        <input type="text" id="empMatricule" placeholder="Ex: MAT-001" required>
                     </div>
                     <div class="form-group">
-                        <label for="empCNPS">Numéro CNPS</label>
-                        <input type="text" id="empCNPS" placeholder="Ex: 123456789">
+                        <label for="empCNPS">Numéro CNPS *</label>
+                        <input type="text" id="empCNPS" placeholder="Ex: 123456789" required>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="empAddress">Adresse</label>
-                        <input type="text" id="empAddress">
+                        <label for="empAddress">Adresse *</label>
+                        <input type="text" id="empAddress" required>
                     </div>
                 </div>
                 <input type="hidden" id="empId">
@@ -534,8 +534,8 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="leaveReason">Raison</label>
-                    <textarea id="leaveReason" rows="3"></textarea>
+                    <label for="leaveReason">Raison *</label>
+                    <textarea id="leaveReason" rows="3" required></textarea>
                 </div>
                 <input type="hidden" id="leaveId">
                 <div class="modal-footer">
@@ -613,33 +613,6 @@
                     </div>
                 </div>
 
-                <div class="account-options">
-                    <h4>Changer de compte</h4>
-                    <div class="account-buttons">
-                        <button class="btn-account-switch" data-role="admin" onclick="switchAccount('admin')">
-                            <i class="fas fa-user-shield"></i>
-                            <div>
-                                <strong>Administrateur</strong>
-                                <span>Accès complet</span>
-                            </div>
-                        </button>
-                        <button class="btn-account-switch" data-role="manager" onclick="switchAccount('manager')">
-                            <i class="fas fa-user-tie"></i>
-                            <div>
-                                <strong>Manager</strong>
-                                <span>Gestion d'équipe</span>
-                            </div>
-                        </button>
-                        <button class="btn-account-switch" data-role="employee" onclick="switchAccount('employee')">
-                            <i class="fas fa-user"></i>
-                            <div>
-                                <strong>Employé</strong>
-                                <span>Accès standard</span>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('logoutModal')">Annuler</button>
                     <button type="button" class="btn btn-danger" onclick="confirmLogout()">
@@ -652,6 +625,12 @@
     </div>
 
     <script src="api-config.js?v=2"></script>
-    <script src="dashboard.js?v=2"></script>
+    <script src="dashboard-utils.js?v=1"></script>
+    <script src="dashboard.js?v=3"></script>
+    <script src="dashboard-employees.js?v=1"></script>
+    <script src="dashboard-departments.js?v=1"></script>
+    <script src="dashboard-leaves.js?v=1"></script>
+    <script src="dashboard-attendance.js?v=1"></script>
+    <script src="dashboard-pdf.js?v=1"></script>
 </body>
 </html>

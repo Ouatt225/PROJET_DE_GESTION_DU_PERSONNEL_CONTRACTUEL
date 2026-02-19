@@ -9,6 +9,7 @@ django.setup()
 
 from django.contrib.auth.models import User
 from api.models import Department, Employee, PasswordRecord
+from api.encryption import encrypt_password
 
 # Recuperer le departement AZING 1
 try:
@@ -149,7 +150,7 @@ for idx, agent in enumerate(agents, 1):
     PasswordRecord.objects.update_or_create(
         user=user,
         defaults={
-            'password_plain': password,
+            'password_encrypted': encrypt_password(password),
             'role': 'employee',
         }
     )

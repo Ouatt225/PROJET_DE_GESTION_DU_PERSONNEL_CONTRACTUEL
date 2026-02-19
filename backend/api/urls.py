@@ -1,9 +1,37 @@
+"""
+Routage URL de l'API REST du système de gestion du personnel contractuel.
+
+Toutes les routes sont préfixées par /api/ (configuré dans empmanager/urls.py).
+
+Routes automatiques (DefaultRouter) :
+    /api/directions/          — Directions (lecture seule)
+    /api/passwords/           — Mots de passe chiffrés (admins uniquement)
+    /api/departments/         — Entreprises prestataires (CRUD)
+    /api/employees/           — Agents contractuels (CRUD)
+    /api/leaves/              — Demandes de congé (CRUD + actions approve/reject/pending)
+    /api/attendances/         — Pointages de présence (CRUD + actions today/by_employee)
+
+Routes manuelles :
+    /api/auth/register/       — Création d'un compte utilisateur
+    /api/auth/login/          — Authentification JWT (retourne access + refresh tokens)
+    /api/auth/change-password/— Modification du mot de passe authentifié
+    /api/dashboard/stats/     — Statistiques du tableau de bord (filtrées par rôle)
+
+Rapports Excel (GET, authentifié, retourne un fichier .xlsx) :
+    /api/reports/attendance/  — Rapport de présence
+    /api/reports/leaves/      — Rapport des congés
+    /api/reports/departments/ — Rapport par entreprise
+    /api/reports/complete/    — Rapport RH complet
+"""
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DirectionViewSet, PasswordRecordViewSet, DepartmentViewSet, EmployeeViewSet,
     LeaveViewSet, AttendanceViewSet,
     RegisterView, LoginView, ChangePasswordView, DashboardStatsView,
+)
+from .views_reports import (
     AttendanceReportView, LeavesReportView, DepartmentsReportView, CompleteReportView,
 )
 

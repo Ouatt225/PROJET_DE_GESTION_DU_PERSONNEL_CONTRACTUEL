@@ -10,6 +10,7 @@ django.setup()
 
 from django.contrib.auth.models import User
 from api.models import PasswordRecord
+from api.encryption import encrypt_password
 
 # Liste des 35 agents NBIG avec leurs mots de passe générés
 nbig_agents = [
@@ -66,7 +67,7 @@ for agent in nbig_agents:
         record, created = PasswordRecord.objects.update_or_create(
             user=user,
             defaults={
-                'password_plain': agent['password'],
+                'password_encrypted': encrypt_password(agent['password']),
                 'role': role,
             }
         )
@@ -97,7 +98,7 @@ for user in other_users:
 
         PasswordRecord.objects.create(
             user=user,
-            password_plain='(mot de passe inconnu)',
+            password_encrypted=encrypt_password('(mot de passe inconnu)'),
             role=role,
         )
         created_count += 1

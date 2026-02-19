@@ -9,6 +9,7 @@ django.setup()
 
 from django.contrib.auth.models import User
 from api.models import Department, Employee, PasswordRecord
+from api.encryption import encrypt_password
 
 try:
     cafor = Department.objects.get(name='CAFOR')
@@ -142,7 +143,7 @@ for idx, agent in enumerate(agents, 1):
     PasswordRecord.objects.update_or_create(
         user=user,
         defaults={
-            'password_plain': password,
+            'password_encrypted': encrypt_password(password),
             'role': 'employee',
         }
     )

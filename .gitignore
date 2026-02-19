@@ -1,0 +1,68 @@
+# ===========================
+# Fichiers sensibles - NE JAMAIS COMMITER
+# ===========================
+.env
+*.env
+.env.local
+.env.production
+
+# ===========================
+# Python / Django
+# ===========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environnement virtuel
+venv/
+env/
+.venv/
+
+# Base de données locale
+*.sqlite3
+db.sqlite3
+
+# Fichiers media uploadés (ne pas versionner les fichiers des utilisateurs)
+backend/media/
+
+# Fichiers statiques collectés
+staticfiles/
+static_root/
+
+# ===========================
+# IDE / Éditeurs
+# ===========================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ===========================
+# Système
+# ===========================
+.DS_Store
+Thumbs.db
+*.log
+
+# ===========================
+# Fichiers Excel générés / sensibles
+# ===========================
+Identifiants_*.xlsx
+Comptes_*.xlsx
+Liste_Agents_*.xlsx
+
+# ===========================
+# Cache Python
+# ===========================
+*.pyc
+migrations/__pycache__/

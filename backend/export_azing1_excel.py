@@ -71,7 +71,7 @@ for idx, emp in enumerate(employees, 1):
     password = '(inconnu)'
     try:
         record = PasswordRecord.objects.get(user=emp.user)
-        password = record.password_plain
+        password = record.get_password()
     except PasswordRecord.DoesNotExist:
         pass
 

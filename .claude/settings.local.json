@@ -4,7 +4,23 @@
       "Bash(python manage.py:*)",
       "Bash(\".\\\\venv\\\\Scripts\\\\python.exe\" manage.py:*)",
       "Bash(\".\\\\venv\\\\Scripts\\\\python.exe\" manage.py migrate)",
-      "Bash(\".\\\\venv\\\\Scripts\\\\python.exe\" -m pip install Pillow)"
+      "Bash(\".\\\\venv\\\\Scripts\\\\python.exe\" -m pip install Pillow)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(timeout:*)",
+      "Bash(./venv/Scripts/python.exe manage.py runserver:*)",
+      "Bash(./venv/Scripts/python.exe manage.py dbshell:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(sc query:*)",
+      "Bash(findstr:*)",
+      "Bash(net start)",
+      "Bash(psql:*)",
+      "Bash(where:*)",
+      "Bash(dir:*)",
+      "Bash(venvScriptspython.exe manage.py makemigrations:*)",
+      "Bash(\"c:\\\\Users\\\\ouatt\\\\OneDrive\\\\Desktop\\\\Projet de gestion du personnel avancé\\\\backend\\\\venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(source:*)",
+      "Bash(python:*)",
+      "Bash(\"C:\\\\Users\\\\ouatt\\\\OneDrive\\\\Desktop\\\\Projet de gestion du personnel contractuel DAF- MEER\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" -m pip install cryptography==42.0.8)"
     ]
   }
 }

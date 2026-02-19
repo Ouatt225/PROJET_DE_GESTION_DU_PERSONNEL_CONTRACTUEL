@@ -10,46 +10,8 @@ const AppState = {
     currentSection: 'dashboard'
 };
 
-// ===========================
-// Données de Démonstration
-// ===========================
-const DEMO_USERS = {
-    admin: { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrateur' },
-    manager: { username: 'manager', password: 'manager123', role: 'manager', name: 'Manager' },
-    employee: { username: 'employee', password: 'employee123', role: 'employee', name: 'Employé' }
-};
-
-// Entreprises par défaut
-const DEFAULT_DEPARTMENTS = [
-    { id: 1, name: 'Ressources Humaines', manager: 'Marie Dupont', description: 'Gestion du personnel et recrutement', employees: 8 },
-    { id: 2, name: 'Informatique', manager: 'Jean Martin', description: 'Développement et support technique', employees: 15 },
-    { id: 3, name: 'Marketing', manager: 'Sophie Bernard', description: 'Communication et stratégie marketing', employees: 10 },
-    { id: 4, name: 'Finance', manager: 'Pierre Dubois', description: 'Comptabilité et gestion financière', employees: 6 },
-    { id: 5, name: 'Commercial', manager: 'Luc Moreau', description: 'Ventes et relations clients', employees: 12 }
-];
-
-// Employés par défaut
-const DEFAULT_EMPLOYEES = [
-    { id: 1, firstName: 'Marie', lastName: 'Dupont', email: 'marie.dupont@company.com', phone: '0612345678', department: 'Ressources Humaines', position: 'DRH', hireDate: '2020-01-15', salary: 55000, address: '10 Rue de Paris, 75001 Paris', status: 'active' },
-    { id: 2, firstName: 'Jean', lastName: 'Martin', email: 'jean.martin@company.com', phone: '0623456789', department: 'Informatique', position: 'Développeur Senior', hireDate: '2019-03-20', salary: 48000, address: '25 Avenue des Champs, 75008 Paris', status: 'active' },
-    { id: 3, firstName: 'Sophie', lastName: 'Bernard', email: 'sophie.bernard@company.com', phone: '0634567890', department: 'Marketing', position: 'Chef de Projet', hireDate: '2021-06-10', salary: 42000, address: '5 Boulevard Haussmann, 75009 Paris', status: 'active' },
-    { id: 4, firstName: 'Pierre', lastName: 'Dubois', email: 'pierre.dubois@company.com', phone: '0645678901', department: 'Finance', position: 'Comptable', hireDate: '2018-09-05', salary: 38000, address: '15 Rue Lafayette, 75010 Paris', status: 'active' },
-    { id: 5, firstName: 'Luc', lastName: 'Moreau', email: 'luc.moreau@company.com', phone: '0656789012', department: 'Commercial', position: 'Commercial Senior', hireDate: '2020-11-12', salary: 45000, address: '30 Rue de Rivoli, 75004 Paris', status: 'active' }
-];
-
-// Congés par défaut
-const DEFAULT_LEAVES = [
-    { id: 1, employeeId: 1, employeeName: 'Marie Dupont', type: 'paid', startDate: '2026-02-15', endDate: '2026-02-20', days: 5, reason: 'Vacances familiales', status: 'pending' },
-    { id: 2, employeeId: 2, employeeName: 'Jean Martin', type: 'sick', startDate: '2026-01-20', endDate: '2026-01-22', days: 2, reason: 'Grippe', status: 'approved' },
-    { id: 3, employeeId: 3, employeeName: 'Sophie Bernard', type: 'paid', startDate: '2026-03-01', endDate: '2026-03-07', days: 7, reason: 'Voyage', status: 'pending' }
-];
-
-// Présences par défaut
-const DEFAULT_ATTENDANCE = [
-    { id: 1, employeeId: 1, employeeName: 'Marie Dupont', date: '2026-01-22', checkIn: '08:30', checkOut: '17:30', hours: 9, status: 'present' },
-    { id: 2, employeeId: 2, employeeName: 'Jean Martin', date: '2026-01-22', checkIn: '09:00', checkOut: '18:00', hours: 9, status: 'present' },
-    { id: 3, employeeId: 3, employeeName: 'Sophie Bernard', date: '2026-01-22', checkIn: '08:45', checkOut: '17:45', hours: 9, status: 'present' }
-];
+// NOTE: Ce fichier est un prototype non utilisé en production.
+// L'application utilise login.js, dashboard.js et employee-profile.js.
 
 // ===========================
 // Initialisation

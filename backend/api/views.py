@@ -1,11 +1,44 @@
+"""
+Vues et ViewSets de l'API REST du système de gestion du personnel contractuel.
+
+Architecture :
+  get_user_context(user)  — Fonction utilitaire déterminant le rôle et le périmètre
+                            d'accès d'un utilisateur (admin / entreprise / manager / employee).
+
+  RoleFilterMixin         — Mixin générique appliquant le filtrage par rôle sur n'importe
+                            quel queryset, configurable via des attributs de classe.
+
+  ViewSets (CRUD complet) :
+    DirectionViewSet       — Directions (lecture seule)
+    PasswordRecordViewSet  — Mots de passe chiffrés (admins uniquement)
+    DepartmentViewSet      — Entreprises prestataires
+    EmployeeViewSet        — Agents contractuels
+    LeaveViewSet           — Demandes de congé (avec workflow d'approbation)
+    AttendanceViewSet      — Pointages de présence
+
+  APIViews (endpoints dédiés) :
+    RegisterView           — Création de compte utilisateur
+    LoginView              — Authentification JWT avec enrichissement du payload
+    ChangePasswordView     — Modification du mot de passe authentifié
+    DashboardStatsView     — Statistiques filtrées par rôle pour le tableau de bord
+
+Authentification : JWT (djangorestframework-simplejwt).
+Autorisation     : Basée sur les champs is_staff, is_superuser et les profils
+                   ManagerProfile / CompanyProfile.
+"""
+
+import logging
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.views import APIView, exception_handler as drf_exception_handler
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from django.http import HttpResponse
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Direction, ManagerProfile, CompanyProfile, Department, Employee, Leave, Attendance, PasswordRecord
 from .serializers import (
     DirectionSerializer, PasswordRecordSerializer, DepartmentSerializer, EmployeeSerializer,
@@ -13,9 +46,169 @@ from .serializers import (
     RegisterSerializer, UserSerializer
 )
 
+logger = logging.getLogger('api')
+security_logger = logging.getLogger('api.security')
+
+
+def custom_exception_handler(exc, context):
+    """Gestionnaire d'exceptions global pour Django REST Framework.
+
+    Étend le handler DRF par défaut pour :
+      - Logger les erreurs inattendues (non gérées par DRF) avec traceback complet.
+      - Retourner un JSON structuré ``{"error": "..."}`` pour les erreurs 500
+        afin d'éviter d'exposer des détails d'implémentation au client.
+
+    Args:
+        exc (Exception): L'exception levée.
+        context (dict): Contexte DRF contenant la view et la request.
+
+    Returns:
+        Response: Réponse DRF standard, ou réponse 500 structurée si l'exception
+                  n'était pas gérée par DRF.
+    """
+    response = drf_exception_handler(exc, context)
+
+    if response is None:
+        # Exception non gérée par DRF (ex. erreur DB, AttributeError inattendue)
+        view_name = context['view'].__class__.__name__ if context.get('view') else 'unknown'
+        method = context['request'].method if context.get('request') else 'unknown'
+        logger.error(
+            "Erreur interne non gérée dans %s.%s : %s",
+            view_name, method, str(exc),
+            exc_info=True,
+        )
+        return Response(
+            {"error": "Une erreur interne est survenue. Veuillez réessayer."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Log les erreurs serveur 5xx qui ont été gérées par DRF
+    if response.status_code >= 500:
+        logger.error("Erreur serveur %s : %s", response.status_code, response.data)
+
+    return response
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    """Limite les tentatives de connexion à 10 par minute et par IP.
+
+    Protège l'endpoint ``/api/login/`` contre les attaques par force brute.
+    Le scope 'login' doit être configuré dans ``REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']``.
+    """
+
+    scope = 'login'
+
+
+def get_user_context(user):
+    """Détermine le rôle et les ressources accessibles d'un utilisateur.
+
+    Inspecte les champs Django (is_superuser, is_staff) et les profils
+    personnalisés (CompanyProfile, ManagerProfile) pour retourner un
+    dictionnaire de contexte utilisé par les ViewSets pour filtrer les données.
+
+    Priorité de détection :
+      1. Superuser → admin
+      2. Possède un CompanyProfile → entreprise
+      3. is_staff → manager (avec liste des directions gérées)
+      4. Sinon → employee
+
+    Args:
+        user (User): Instance de l'utilisateur Django authentifié.
+
+    Returns:
+        dict: Dictionnaire contenant au minimum la clé 'role', et selon le rôle :
+            - {'role': 'admin'}
+            - {'role': 'entreprise', 'department': Department}
+            - {'role': 'manager', 'directions': list[str]}
+            - {'role': 'employee'}
+    """
+    if user.is_superuser:
+        return {'role': 'admin'}
+
+    try:
+        company = user.company_profile
+        return {'role': 'entreprise', 'department': company.department}
+    except CompanyProfile.DoesNotExist:
+        pass
+
+    if user.is_staff:
+        try:
+            direction_names = list(user.manager_profile.directions.values_list('name', flat=True))
+        except ManagerProfile.DoesNotExist:
+            direction_names = []
+        return {'role': 'manager', 'directions': direction_names}
+
+    return {'role': 'employee'}
+
+
+class RoleFilterMixin:
+    """Mixin réutilisable pour le filtrage des querysets selon le rôle utilisateur.
+
+    Centralise la logique de filtrage RBAC (Role-Based Access Control) applicable
+    à tout ViewSet dont les objets sont liés à des employés.
+
+    Les champs de filtre sont configurables par attributs de classe, ce qui permet
+    à chaque ViewSet d'adapter les noms de champs sans dupliquer la logique.
+
+    Attributes:
+        company_filter_field (str): Champ ORM pour filtrer par entreprise.
+            Défaut : 'employee__department'.
+        direction_filter_field (str): Champ ORM pour filtrer par direction (lookup __in).
+            Défaut : 'employee__direction__in'.
+        employee_filter_field (str): Champ ORM pour filtrer par utilisateur employé.
+            Défaut : 'employee__user'.
+
+    Usage:
+        class MonViewSet(RoleFilterMixin, viewsets.ModelViewSet):
+            company_filter_field = 'department'      # override si nécessaire
+            direction_filter_field = 'direction__in'
+            employee_filter_field = 'user'
+
+            def get_queryset(self):
+                return self.get_role_filtered_queryset(MonModel.objects.all())
+    """
+
+    company_filter_field = 'employee__department'
+    direction_filter_field = 'employee__direction__in'
+    employee_filter_field = 'employee__user'
+
+    def get_role_filtered_queryset(self, queryset):
+        """Filtre le queryset selon le rôle de l'utilisateur authentifié.
+
+        Args:
+            queryset (QuerySet): Queryset de base non filtré.
+
+        Returns:
+            QuerySet: Queryset filtré selon le rôle et le périmètre de l'utilisateur.
+                - admin     → queryset complet (aucun filtre)
+                - entreprise → filtrée par entreprise (company_filter_field)
+                - manager   → filtrée par directions (direction_filter_field),
+                              ou queryset vide si le manager n'a aucune direction
+                - employee  → filtrée par l'utilisateur lui-même (employee_filter_field)
+        """
+        ctx = get_user_context(self.request.user)
+        role = ctx['role']
+
+        if role == 'admin':
+            return queryset
+        if role == 'entreprise':
+            return queryset.filter(**{self.company_filter_field: ctx['department']})
+        if role == 'manager':
+            if ctx['directions']:
+                return queryset.filter(**{self.direction_filter_field: ctx['directions']})
+            return queryset.none()
+        # Rôle employee : accès limité à ses propres données
+        return queryset.filter(**{self.employee_filter_field: self.request.user})
+
 
 class DirectionViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet pour les directions (lecture seule)"""
+    """ViewSet en lecture seule pour les directions ministérielles.
+
+    Utilisé principalement pour alimenter les listes déroulantes dans l'interface.
+    Accessible à tout utilisateur authentifié.
+    La pagination est désactivée (retour de la liste complète).
+    """
+
     queryset = Direction.objects.all()
     serializer_class = DirectionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -23,67 +216,83 @@ class DirectionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class PasswordRecordViewSet(viewsets.ModelViewSet):
-    """ViewSet pour la table des mots de passe (admin et managers uniquement)"""
+    """ViewSet pour la consultation et la gestion des mots de passe chiffrés.
+
+    Accès restreint aux utilisateurs avec is_staff=True (admins et managers).
+    Les mots de passe sont retournés déchiffrés par le serializer (champ password_plain).
+
+    Filtrage par rôle :
+        - admin     → tous les enregistrements
+        - entreprise → enregistrements des employés de son entreprise
+        - manager   → enregistrements des employés de ses directions
+        - employee  → aucun accès (HTTP 403)
+    """
+
     queryset = PasswordRecord.objects.all()
     serializer_class = PasswordRecordSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAdminUser]
     search_fields = ['user__first_name', 'user__last_name', 'user__username', 'role']
     ordering_fields = ['user__last_name', 'role', 'created_at']
-
     pagination_class = None
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser:
+        """Retourne les enregistrements de mots de passe accessibles à l'utilisateur.
+
+        Returns:
+            QuerySet[PasswordRecord]: Queryset filtré selon le rôle.
+        """
+        ctx = get_user_context(self.request.user)
+        role = ctx['role']
+
+        if role == 'admin':
             return PasswordRecord.objects.all()
-        # Entreprise : ne voit que les mots de passe de ses employés
-        try:
-            company = user.company_profile
+        if role == 'entreprise':
             employee_users = Employee.objects.filter(
-                department=company.department
+                department=ctx['department']
             ).values_list('user', flat=True)
             return PasswordRecord.objects.filter(user__in=employee_users)
-        except CompanyProfile.DoesNotExist:
-            pass
-        # Manager : ne voit que les mots de passe de ses directions
-        if user.is_staff:
-            try:
-                profile = user.manager_profile
-                direction_names = list(profile.directions.values_list('name', flat=True))
-                if direction_names:
-                    employee_users = Employee.objects.filter(
-                        direction__in=direction_names
-                    ).values_list('user', flat=True)
-                    return PasswordRecord.objects.filter(user__in=employee_users)
-            except ManagerProfile.DoesNotExist:
-                pass
+        if role == 'manager':
+            if ctx['directions']:
+                employee_users = Employee.objects.filter(
+                    direction__in=ctx['directions']
+                ).values_list('user', flat=True)
+                return PasswordRecord.objects.filter(user__in=employee_users)
             return PasswordRecord.objects.all()
         return PasswordRecord.objects.none()
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
-    """ViewSet pour les entreprises"""
+    """ViewSet CRUD pour les entreprises prestataires (Department).
+
+    Filtrage par rôle :
+        - admin / manager → toutes les entreprises
+        - entreprise      → uniquement la sienne
+        - employee        → uniquement l'entreprise à laquelle il est rattaché
+
+    La pagination est désactivée (retour de la liste complète).
+    """
+
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser:
+        """Retourne les entreprises visibles par l'utilisateur authentifié.
+
+        Returns:
+            QuerySet[Department]: Queryset filtré selon le rôle.
+        """
+        ctx = get_user_context(self.request.user)
+        role = ctx['role']
+
+        if role in ('admin', 'manager'):
             return Department.objects.all()
-        # Entreprise : ne voit que son entreprise
+        if role == 'entreprise':
+            return Department.objects.filter(id=ctx['department'].id)
+        # employee : accès limité à son entreprise de rattachement
         try:
-            company = user.company_profile
-            return Department.objects.filter(id=company.department.id)
-        except CompanyProfile.DoesNotExist:
-            pass
-        # Manager : voit tous les entreprises
-        if user.is_staff:
-            return Department.objects.all()
-        # Employé : voit son entreprise
-        try:
-            emp = user.employee_profile
+            emp = self.request.user.employee_profile
             if emp.department:
                 return Department.objects.filter(id=emp.department.id)
         except Employee.DoesNotExist:
@@ -92,15 +301,36 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def employees(self, request, pk=None):
-        """Récupère tous les employés d'une entreprise"""
+        """Récupère tous les employés rattachés à une entreprise donnée.
+
+        Args:
+            request (Request): Requête HTTP.
+            pk (str): Clé primaire de l'entreprise.
+
+        Returns:
+            Response: Liste sérialisée des employés de l'entreprise.
+        """
         department = self.get_object()
         employees = department.employees.all()
         serializer = EmployeeSerializer(employees, many=True)
         return Response(serializer.data)
 
 
-class EmployeeViewSet(viewsets.ModelViewSet):
-    """ViewSet pour les employés"""
+class EmployeeViewSet(RoleFilterMixin, viewsets.ModelViewSet):
+    """ViewSet CRUD pour les agents contractuels.
+
+    Hérite de RoleFilterMixin avec des champs de filtre adaptés au modèle Employee
+    (les champs ne sont pas préfixés par 'employee__' puisque Employee est la
+    ressource principale).
+
+    Champs de filtre surchargés :
+        company_filter_field   = 'department'
+        direction_filter_field = 'direction__in'
+        employee_filter_field  = 'user'
+
+    La pagination est désactivée (retour de la liste complète).
+    """
+
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -109,39 +339,33 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     search_fields = ['first_name', 'last_name', 'email', 'position']
     ordering_fields = ['created_at', 'hire_date', 'last_name']
 
+    # Champs de filtre adaptés au modèle Employee (ressource principale)
+    company_filter_field = 'department'
+    direction_filter_field = 'direction__in'
+    employee_filter_field = 'user'
+
     def get_queryset(self):
-        """Filtre les employés selon le rôle de l'utilisateur"""
-        user = self.request.user
-        queryset = Employee.objects.all()
+        """Retourne les employés accessibles à l'utilisateur authentifié.
 
-        # Admin (superuser) voit tout
-        if user.is_superuser:
-            return queryset
-
-        # Entreprise : ne voit que les employés de son entreprise
-        if user.is_staff and not user.is_superuser:
-            try:
-                company = user.company_profile
-                return queryset.filter(department=company.department)
-            except CompanyProfile.DoesNotExist:
-                pass
-
-            # Manager : ne voit que les employés de ses directions
-            try:
-                profile = user.manager_profile
-                direction_names = list(profile.directions.values_list('name', flat=True))
-                if direction_names:
-                    return queryset.filter(direction__in=direction_names)
-                return queryset.none()
-            except ManagerProfile.DoesNotExist:
-                return queryset.none()
-
-        # Employé : ne voit que son propre profil
-        return queryset.filter(user=user)
+        Returns:
+            QuerySet[Employee]: Queryset filtré par RoleFilterMixin.
+        """
+        return self.get_role_filtered_queryset(Employee.objects.all())
 
     @action(detail=False, methods=['get'])
     def by_department(self, request):
-        """Récupère les employés groupés par entreprise"""
+        """Retourne les employés regroupés par entreprise.
+
+        Chaque entrée du tableau contient les données de l'entreprise et la liste
+        de ses employés (sérialisée). N'inclut que les entreprises ayant au moins
+        un employé visible par l'utilisateur courant.
+
+        Args:
+            request (Request): Requête HTTP.
+
+        Returns:
+            Response: Liste de dicts {'department': {...}, 'employees': [...]}.
+        """
         departments = Department.objects.all()
         employee_qs = self.get_queryset()
         result = []
@@ -155,8 +379,19 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 
-class LeaveViewSet(viewsets.ModelViewSet):
-    """ViewSet pour les congés"""
+class LeaveViewSet(RoleFilterMixin, viewsets.ModelViewSet):
+    """ViewSet CRUD pour les demandes de congé, avec workflow d'approbation à deux niveaux.
+
+    Workflow d'approbation :
+      Employee soumet (POST /leaves/)       → status = 'pending'
+      Manager valide (POST /leaves/{id}/approve/) → status = 'manager_approved'
+      Entreprise approuve (POST /leaves/{id}/approve/) → status = 'approved'
+      Tout rôle autorisé (POST /leaves/{id}/reject/)   → status = 'rejected'
+
+    L'admin peut approuver directement (court-circuit des deux étapes).
+    La suppression est interdite pour les congés déjà approuvés.
+    """
+
     queryset = Leave.objects.all()
     pagination_class = None
     serializer_class = LeaveSerializer
@@ -166,45 +401,39 @@ class LeaveViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'start_date']
 
     def get_queryset(self):
-        """Filtre les congés selon le rôle de l'utilisateur"""
-        user = self.request.user
-        queryset = Leave.objects.all()
+        """Retourne les demandes de congé accessibles à l'utilisateur authentifié.
 
-        if user.is_superuser:
-            return queryset
-
-        if user.is_staff and not user.is_superuser:
-            try:
-                company = user.company_profile
-                return queryset.filter(employee__department=company.department)
-            except CompanyProfile.DoesNotExist:
-                pass
-
-            try:
-                profile = user.manager_profile
-                direction_names = list(profile.directions.values_list('name', flat=True))
-                if direction_names:
-                    return queryset.filter(employee__direction__in=direction_names)
-                return queryset.none()
-            except ManagerProfile.DoesNotExist:
-                return queryset.none()
-
-        return queryset.filter(employee__user=user)
+        Returns:
+            QuerySet[Leave]: Queryset filtré par RoleFilterMixin.
+        """
+        return self.get_role_filtered_queryset(Leave.objects.all())
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        """Approuve une demande de congé (validation double : Manager puis Entreprise)"""
+        """Approuve ou valide une demande de congé selon le rôle de l'appelant.
+
+        Comportement selon le rôle :
+          - admin     : approbation directe (status → 'approved')
+          - manager   : première validation (status → 'manager_approved')
+          - entreprise : validation finale si manager_approved (status → 'approved')
+
+        Args:
+            request (Request): Requête HTTP POST.
+            pk (str): Identifiant de la demande de congé.
+
+        Returns:
+            Response: Données du congé mis à jour (HTTP 200), ou erreur (HTTP 400).
+        """
         leave = self.get_object()
         user = request.user
 
         if user.is_superuser:
-            # Admin : approbation directe
+            # Admin : approbation directe, bypasse la validation manager
             leave.status = 'approved'
             leave.approved_by = user
             if not leave.manager_approved_by:
                 leave.manager_approved_by = user
         else:
-            # Vérifier si c'est un responsable entreprise
             is_entreprise = False
             try:
                 user.company_profile
@@ -213,7 +442,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
                 pass
 
             if is_entreprise:
-                # Entreprise : ne peut valider que si le manager a déjà validé
+                # L'entreprise ne peut valider que si le manager a déjà approuvé
                 if leave.status != 'manager_approved':
                     return Response(
                         {"error": "Ce congé doit d'abord être validé par le manager de direction."},
@@ -222,7 +451,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
                 leave.status = 'approved'
                 leave.approved_by = user
             elif user.is_staff:
-                # Manager : première validation
+                # Manager : première validation uniquement si le congé est en attente
                 if leave.status != 'pending':
                     return Response(
                         {"error": "Ce congé n'est plus en attente de validation manager."},
@@ -232,12 +461,34 @@ class LeaveViewSet(viewsets.ModelViewSet):
                 leave.manager_approved_by = user
 
         leave.save()
+        logger.info(
+            "Congé #%s approuvé (status=%s) par user='%s'",
+            leave.pk, leave.status, request.user.username,
+        )
         serializer = self.get_serializer(leave)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        """Rejette une demande de congé (possible à n'importe quelle étape)"""
+        """Rejette une demande de congé (status → 'rejected').
+
+        Seuls les utilisateurs avec is_staff ou is_superuser peuvent rejeter.
+        Un congé déjà approuvé ou rejeté ne peut pas être retraité.
+
+        Args:
+            request (Request): Requête HTTP POST.
+            pk (str): Identifiant de la demande de congé.
+
+        Returns:
+            Response: Données du congé mis à jour (HTTP 200), ou erreur
+                (HTTP 403 si non autorisé, HTTP 400 si déjà traité).
+        """
+        user = request.user
+        if not user.is_staff and not user.is_superuser:
+            return Response(
+                {"error": "Vous n'avez pas la permission de rejeter un congé."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         leave = self.get_object()
         if leave.status in ('approved', 'rejected'):
             return Response(
@@ -245,23 +496,59 @@ class LeaveViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         leave.status = 'rejected'
-        leave.approved_by = request.user
+        leave.approved_by = user
         leave.save()
+        logger.info(
+            "Congé #%s rejeté par user='%s'",
+            leave.pk, user.username,
+        )
         serializer = self.get_serializer(leave)
         return Response(serializer.data)
 
+    def destroy(self, request, *args, **kwargs):
+        """Supprime une demande de congé.
+
+        La suppression est interdite si le congé est dans le statut 'approved'.
+
+        Returns:
+            Response: HTTP 204 si suppression réussie,
+                      HTTP 400 si le congé est déjà approuvé.
+        """
+        leave = self.get_object()
+        if leave.status == 'approved':
+            return Response(
+                {"error": "Impossible de supprimer un congé déjà approuvé."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'])
     def pending(self, request):
-        """Récupère toutes les demandes en attente (pending + manager_approved)"""
+        """Retourne toutes les demandes en attente de traitement.
+
+        Inclut les statuts 'pending' (attente manager) et 'manager_approved'
+        (attente approbation entreprise).
+
+        Args:
+            request (Request): Requête HTTP GET.
+
+        Returns:
+            Response: Liste des demandes de congé non finalisées.
+        """
         pending_leaves = self.get_queryset().filter(status__in=['pending', 'manager_approved'])
         serializer = self.get_serializer(pending_leaves, many=True)
         return Response(serializer.data)
 
 
-class AttendanceViewSet(viewsets.ModelViewSet):
-    pagination_class = None
-    """ViewSet pour les présences"""
+class AttendanceViewSet(RoleFilterMixin, viewsets.ModelViewSet):
+    """ViewSet CRUD pour les enregistrements de présence (pointages).
+
+    La contrainte unique_together (employee, date) est gérée au niveau du modèle.
+    Le calcul des heures travaillées est délégué à la propriété Attendance.hours_worked.
+    """
+
     queryset = Attendance.objects.all()
+    pagination_class = None
     serializer_class = AttendanceSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['employee', 'status', 'date']
@@ -269,34 +556,23 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['date']
 
     def get_queryset(self):
-        """Filtre les présences selon le rôle de l'utilisateur"""
-        user = self.request.user
-        queryset = Attendance.objects.all()
+        """Retourne les présences accessibles à l'utilisateur authentifié.
 
-        if user.is_superuser:
-            return queryset
-
-        if user.is_staff and not user.is_superuser:
-            try:
-                company = user.company_profile
-                return queryset.filter(employee__department=company.department)
-            except CompanyProfile.DoesNotExist:
-                pass
-
-            try:
-                profile = user.manager_profile
-                direction_names = list(profile.directions.values_list('name', flat=True))
-                if direction_names:
-                    return queryset.filter(employee__direction__in=direction_names)
-                return queryset.none()
-            except ManagerProfile.DoesNotExist:
-                return queryset.none()
-
-        return queryset.filter(employee__user=user)
+        Returns:
+            QuerySet[Attendance]: Queryset filtré par RoleFilterMixin.
+        """
+        return self.get_role_filtered_queryset(Attendance.objects.all())
 
     @action(detail=False, methods=['get'])
     def today(self, request):
-        """Récupère les présences d'aujourd'hui"""
+        """Retourne les enregistrements de présence pour la date du jour.
+
+        Args:
+            request (Request): Requête HTTP GET.
+
+        Returns:
+            Response: Liste des présences d'aujourd'hui.
+        """
         from datetime import date
         today_attendance = self.queryset.filter(date=date.today())
         serializer = self.get_serializer(today_attendance, many=True)
@@ -304,7 +580,15 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_employee(self, request):
-        """Récupère les présences par employé"""
+        """Retourne l'historique de présence d'un employé donné.
+
+        Args:
+            request (Request): Requête HTTP GET avec query param `employee_id`.
+
+        Returns:
+            Response: Liste des présences de l'employé (HTTP 200),
+                      ou HTTP 400 si employee_id manquant.
+        """
         employee_id = request.query_params.get('employee_id')
         if not employee_id:
             return Response(
@@ -318,10 +602,25 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 
 
 class RegisterView(APIView):
-    """Vue pour l'enregistrement d'utilisateurs"""
+    """Vue pour la création d'un nouveau compte utilisateur.
+
+    Accessible sans authentification (AllowAny).
+    Retourne les tokens JWT (access + refresh) et les données de l'utilisateur créé.
+    """
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        """Crée un compte utilisateur et retourne les tokens JWT.
+
+        Args:
+            request (Request): Corps JSON avec username, password, password2,
+                email, first_name, last_name, role.
+
+        Returns:
+            Response: {'user': {...}, 'refresh': str, 'access': str} (HTTP 201),
+                      ou erreurs de validation (HTTP 400).
+        """
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -335,48 +634,66 @@ class RegisterView(APIView):
 
 
 class LoginView(APIView):
-    """Vue pour la connexion personnalisée"""
+    """Vue d'authentification personnalisée retournant les tokens JWT enrichis.
+
+    Le payload retourné inclut, en plus des tokens standard, des informations
+    sur le rôle et le périmètre de l'utilisateur :
+      - role              : 'admin' | 'manager' | 'entreprise' | 'employee'
+      - managed_directions : liste des noms de directions (pour managers)
+      - managed_department : {'id', 'name'} de l'entreprise (pour entreprise)
+
+    Accessible sans authentification (AllowAny).
+    Protégée par LoginRateThrottle (10 tentatives/minute par IP).
+    """
+
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
+        """Authentifie un utilisateur et retourne les tokens JWT avec métadonnées de rôle.
+
+        Le rôle et le périmètre (directions/département) sont déterminés via
+        ``get_user_context()`` pour éviter toute duplication de logique.
+        Les tentatives échouées sont journalisées dans le log de sécurité.
+
+        Args:
+            request (Request): Corps JSON avec username et password.
+
+        Returns:
+            Response: {'user': {...}, 'refresh': str, 'access': str} (HTTP 200),
+                      {'error': '...'} (HTTP 400 si champs manquants),
+                      ou {'error': 'Identifiants invalides'} (HTTP 401).
+        """
         username = request.data.get('username')
         password = request.data.get('password')
+        ip = request.META.get('REMOTE_ADDR', 'inconnu')
+
+        if not username or not password:
+            return Response(
+                {"error": "Le nom d'utilisateur et le mot de passe sont requis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user = authenticate(username=username, password=password)
 
         if user is not None:
-            # Déterminer automatiquement le rôle basé sur les permissions
-            if user.is_superuser:
-                role = 'admin'
-            else:
-                try:
-                    user.company_profile
-                    role = 'entreprise'
-                except CompanyProfile.DoesNotExist:
-                    if user.is_staff:
-                        role = 'manager'
-                    else:
-                        role = 'employee'
+            # Déléguer entièrement la détection de rôle et de périmètre à get_user_context()
+            ctx = get_user_context(user)
+            role = ctx['role']
 
-            # Récupérer les directions du manager
-            managed_directions = []
+            # Construire les métadonnées de périmètre depuis le contexte centralisé
+            managed_directions = ctx.get('directions', [])
             managed_department = None
-            if role == 'manager':
-                try:
-                    profile = user.manager_profile
-                    managed_directions = list(profile.directions.values_list('name', flat=True))
-                except ManagerProfile.DoesNotExist:
-                    pass
-            elif role == 'entreprise':
-                try:
-                    managed_department = {
-                        'id': user.company_profile.department.id,
-                        'name': user.company_profile.department.name,
-                    }
-                except CompanyProfile.DoesNotExist:
-                    pass
+            if role == 'entreprise':
+                dept = ctx.get('department')
+                if dept:
+                    managed_department = {'id': dept.id, 'name': dept.name}
 
             refresh = RefreshToken.for_user(user)
+            security_logger.info(
+                "Connexion réussie : utilisateur='%s' rôle=%s ip=%s",
+                user.username, role, ip,
+            )
             return Response({
                 'user': {
                     'id': user.id,
@@ -391,17 +708,39 @@ class LoginView(APIView):
                 'access': str(refresh.access_token),
             })
         else:
+            security_logger.warning(
+                "Échec de connexion : username='%s' ip=%s",
+                username, ip,
+            )
             return Response(
                 {"error": "Identifiants invalides"},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
 
 class ChangePasswordView(APIView):
-    """Vue pour changer le mot de passe"""
+    """Vue permettant à un utilisateur authentifié de changer son mot de passe.
+
+    Validations effectuées :
+      - Les deux champs (old_password, new_password) doivent être fournis.
+      - L'ancien mot de passe doit correspondre au mot de passe actuel.
+      - Le nouveau mot de passe passe les validateurs Django (AUTH_PASSWORD_VALIDATORS) :
+          longueur minimale, pas trop similaire au nom d'utilisateur,
+          pas un mot de passe commun, pas entièrement numérique.
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        """Change le mot de passe de l'utilisateur connecté.
+
+        Args:
+            request (Request): Corps JSON avec old_password et new_password.
+
+        Returns:
+            Response: {'message': 'Mot de passe modifié avec succès'} (HTTP 200),
+                      ou {'error': str | list} (HTTP 400).
+        """
         user = request.user
         old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
@@ -409,67 +748,89 @@ class ChangePasswordView(APIView):
         if not old_password or not new_password:
             return Response(
                 {"error": "Ancien et nouveau mot de passe requis"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Vérifier l'ancien mot de passe
         if not user.check_password(old_password):
+            security_logger.warning(
+                "Tentative de changement de mot de passe avec ancien mdp incorrect : user='%s'",
+                user.username,
+            )
             return Response(
                 {"error": "Ancien mot de passe incorrect"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Vérifier la longueur du nouveau mot de passe
-        if len(new_password) < 6:
+        # Valider le nouveau mot de passe via AUTH_PASSWORD_VALIDATORS (Django)
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as exc:
             return Response(
-                {"error": "Le nouveau mot de passe doit contenir au moins 6 caractères"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": list(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Changer le mot de passe
         user.set_password(new_password)
         user.save()
-
+        security_logger.info("Mot de passe changé avec succès : user='%s'", user.username)
         return Response({"message": "Mot de passe modifié avec succès"})
 
 
 class DashboardStatsView(APIView):
-    """Vue pour les statistiques du tableau de bord"""
+    """Vue retournant les statistiques du tableau de bord filtrées par rôle.
+
+    Les métriques retournées sont scopées au périmètre visible par l'utilisateur :
+      - admin     → toutes les données
+      - entreprise → données de son entreprise uniquement
+      - manager   → données de ses directions uniquement
+
+    Métriques :
+      - total_employees   : nombre d'agents dans le périmètre
+      - total_departments : nombre total d'entreprises (non filtré par rôle)
+      - present_today     : agents marqués 'present' aujourd'hui
+      - on_leave_today    : agents en congé approuvé couvrant la date du jour
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """Calcule et retourne les statistiques du tableau de bord.
+
+        Args:
+            request (Request): Requête HTTP GET authentifiée.
+
+        Returns:
+            Response: Dict avec total_employees, total_departments,
+                      present_today, on_leave_today.
+        """
         from datetime import date
 
-        user = request.user
+        ctx = get_user_context(request.user)
+        role = ctx['role']
+
         employees_qs = Employee.objects.all()
         leaves_qs = Leave.objects.all()
         attendance_qs = Attendance.objects.all()
 
-        # Filtrer selon le rôle
-        if not user.is_superuser and user.is_staff:
-            try:
-                company = user.company_profile
-                employees_qs = employees_qs.filter(department=company.department)
-                leaves_qs = leaves_qs.filter(employee__department=company.department)
-                attendance_qs = attendance_qs.filter(employee__department=company.department)
-            except CompanyProfile.DoesNotExist:
-                try:
-                    profile = user.manager_profile
-                    direction_names = list(profile.directions.values_list('name', flat=True))
-                    if direction_names:
-                        employees_qs = employees_qs.filter(direction__in=direction_names)
-                        leaves_qs = leaves_qs.filter(employee__direction__in=direction_names)
-                        attendance_qs = attendance_qs.filter(employee__direction__in=direction_names)
-                    else:
-                        employees_qs = employees_qs.none()
-                        leaves_qs = leaves_qs.none()
-                        attendance_qs = attendance_qs.none()
-                except ManagerProfile.DoesNotExist:
-                    employees_qs = employees_qs.none()
-                    leaves_qs = leaves_qs.none()
-                    attendance_qs = attendance_qs.none()
+        # Filtrer selon le périmètre du rôle
+        if role == 'entreprise':
+            dept = ctx['department']
+            employees_qs = employees_qs.filter(department=dept)
+            leaves_qs = leaves_qs.filter(employee__department=dept)
+            attendance_qs = attendance_qs.filter(employee__department=dept)
+        elif role == 'manager':
+            directions = ctx['directions']
+            if directions:
+                employees_qs = employees_qs.filter(direction__in=directions)
+                leaves_qs = leaves_qs.filter(employee__direction__in=directions)
+                attendance_qs = attendance_qs.filter(employee__direction__in=directions)
+            else:
+                employees_qs = employees_qs.none()
+                leaves_qs = leaves_qs.none()
+                attendance_qs = attendance_qs.none()
 
         total_employees = employees_qs.count()
+        # total_departments n'est pas filtré par rôle (vue globale de la structure)
         total_departments = Department.objects.count()
         present_today = attendance_qs.filter(
             date=date.today(),
@@ -487,447 +848,3 @@ class DashboardStatsView(APIView):
             'present_today': present_today,
             'on_leave_today': on_leave_today,
         })
-
-
-# ===========================
-# Rapports Excel
-# ===========================
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from io import BytesIO
-from datetime import date
-
-
-def _get_excel_styles():
-    """Retourne les styles communs pour les rapports Excel"""
-    header_font = Font(name='Arial', bold=True, size=11, color='FFFFFF')
-    header_fill = PatternFill(start_color='2D3748', end_color='2D3748', fill_type='solid')
-    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    cell_font = Font(name='Arial', size=10)
-    cell_align = Alignment(horizontal='left', vertical='center')
-    center_align = Alignment(horizontal='center', vertical='center')
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    title_font = Font(name='Arial', bold=True, size=14, color='2D3748')
-    title_align = Alignment(horizontal='center', vertical='center')
-    return {
-        'header_font': header_font, 'header_fill': header_fill, 'header_align': header_align,
-        'cell_font': cell_font, 'cell_align': cell_align, 'center_align': center_align,
-        'thin_border': thin_border, 'title_font': title_font, 'title_align': title_align,
-    }
-
-
-def _write_headers(ws, headers, col_widths, row=3, styles=None):
-    """Ecrit les en-tetes du tableau Excel"""
-    if not styles:
-        styles = _get_excel_styles()
-    for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
-        cell = ws.cell(row=row, column=col_idx, value=header)
-        cell.font = styles['header_font']
-        cell.fill = styles['header_fill']
-        cell.alignment = styles['header_align']
-        cell.border = styles['thin_border']
-        # Gestion des colonnes > Z
-        if col_idx <= 26:
-            ws.column_dimensions[chr(64 + col_idx)].width = width
-        else:
-            from openpyxl.utils import get_column_letter
-            ws.column_dimensions[get_column_letter(col_idx)].width = width
-    ws.row_dimensions[row].height = 25
-
-
-def _write_title(ws, title, col_count, styles=None):
-    """Ecrit le titre du rapport"""
-    if not styles:
-        styles = _get_excel_styles()
-    from openpyxl.utils import get_column_letter
-    last_col = get_column_letter(col_count)
-    ws.merge_cells(f'A1:{last_col}1')
-    title_cell = ws['A1']
-    title_cell.value = title
-    title_cell.font = styles['title_font']
-    title_cell.alignment = styles['title_align']
-    ws.row_dimensions[1].height = 35
-    # Date de generation
-    ws.merge_cells(f'A2:{last_col}2')
-    date_cell = ws['A2']
-    date_cell.value = f"Généré le {date.today().strftime('%d/%m/%Y')}"
-    date_cell.font = Font(name='Arial', size=9, italic=True, color='666666')
-    date_cell.alignment = Alignment(horizontal='center')
-
-
-def _filter_employees(user):
-    """Filtre les employes selon le role de l'utilisateur"""
-    qs = Employee.objects.all()
-    if user.is_superuser:
-        return qs
-    if user.is_staff and not user.is_superuser:
-        try:
-            company = user.company_profile
-            return qs.filter(department=company.department)
-        except CompanyProfile.DoesNotExist:
-            pass
-        try:
-            profile = user.manager_profile
-            direction_names = list(profile.directions.values_list('name', flat=True))
-            if direction_names:
-                return qs.filter(direction__in=direction_names)
-            return qs.none()
-        except ManagerProfile.DoesNotExist:
-            return qs.none()
-    return qs.filter(user=user)
-
-
-def _make_response(wb, filename):
-    """Cree la HttpResponse avec le fichier Excel"""
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    response = HttpResponse(
-        buffer.getvalue(),
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
-
-
-class AttendanceReportView(APIView):
-    """Rapport de presence Excel"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        styles = _get_excel_styles()
-        employees = _filter_employees(request.user)
-        employee_ids = employees.values_list('id', flat=True)
-        attendances = Attendance.objects.filter(employee_id__in=employee_ids).select_related('employee', 'employee__department').order_by('-date')
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Présences"
-
-        headers = ['N°', 'NOM COMPLET', 'ENTREPRISE', 'DIRECTION', 'DATE', 'ARRIVÉE', 'DÉPART', 'HEURES', 'STATUT']
-        col_widths = [6, 30, 20, 25, 14, 12, 12, 10, 14]
-
-        _write_title(ws, 'RAPPORT DE PRÉSENCE', len(headers), styles)
-        _write_headers(ws, headers, col_widths, row=3, styles=styles)
-
-        status_labels = {'present': 'Présent', 'absent': 'Absent', 'late': 'En retard', 'half_day': 'Demi-journée'}
-        status_fills = {
-            'present': PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid'),
-            'absent': PatternFill(start_color='FFEBEE', end_color='FFEBEE', fill_type='solid'),
-            'late': PatternFill(start_color='FFF3E0', end_color='FFF3E0', fill_type='solid'),
-        }
-
-        row_num = 4
-        for idx, att in enumerate(attendances, 1):
-            emp = att.employee
-            row_data = [
-                idx,
-                emp.full_name,
-                emp.department.name if emp.department else '-',
-                emp.direction or '-',
-                att.date.strftime('%d/%m/%Y') if att.date else '-',
-                att.check_in.strftime('%H:%M') if att.check_in else '-',
-                att.check_out.strftime('%H:%M') if att.check_out else '-',
-                str(att.hours_worked) if att.hours_worked else '-',
-                status_labels.get(att.status, att.status),
-            ]
-            row_fill = status_fills.get(att.status, PatternFill())
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.fill = row_fill
-                cell.alignment = styles['center_align'] if col_idx in (1, 5, 6, 7, 8, 9) else styles['cell_align']
-            ws.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        # Total
-        from openpyxl.utils import get_column_letter
-        last_col = get_column_letter(len(headers))
-        ws.merge_cells(f'A{row_num}:{last_col}{row_num}')
-        total_cell = ws.cell(row=row_num, column=1, value=f'TOTAL : {len(attendances)} enregistrements')
-        total_cell.font = Font(name='Arial', bold=True, size=11)
-        total_cell.alignment = styles['center_align']
-        total_cell.border = styles['thin_border']
-
-        return _make_response(wb, f'Rapport_Presences_{date.today().strftime("%Y%m%d")}.xlsx')
-
-
-class LeavesReportView(APIView):
-    """Rapport des conges Excel"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        styles = _get_excel_styles()
-        employees = _filter_employees(request.user)
-        employee_ids = employees.values_list('id', flat=True)
-        leaves = Leave.objects.filter(employee_id__in=employee_ids).select_related(
-            'employee', 'employee__department', 'manager_approved_by', 'approved_by'
-        ).order_by('-created_at')
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Congés"
-
-        headers = ['N°', 'NOM COMPLET', 'ENTREPRISE', 'DIRECTION', 'TYPE', 'DÉBUT', 'FIN', 'JOURS', 'STATUT', 'VALIDÉ PAR (MANAGER)', 'APPROUVÉ PAR (ENTREPRISE)']
-        col_widths = [6, 30, 20, 25, 18, 14, 14, 8, 18, 25, 25]
-
-        _write_title(ws, 'RAPPORT DES CONGÉS', len(headers), styles)
-        _write_headers(ws, headers, col_widths, row=3, styles=styles)
-
-        type_labels = {
-            'annual': 'Congé annuel', 'sick': 'Maladie', 'maternity': 'Maternité',
-            'paternity': 'Paternité', 'unpaid': 'Sans solde', 'other': 'Autre',
-        }
-        status_labels = {
-            'pending': 'En attente', 'manager_approved': 'Validé Manager',
-            'approved': 'Approuvé', 'rejected': 'Rejeté',
-        }
-        status_fills = {
-            'pending': PatternFill(start_color='FFF3E0', end_color='FFF3E0', fill_type='solid'),
-            'manager_approved': PatternFill(start_color='E8EAF6', end_color='E8EAF6', fill_type='solid'),
-            'approved': PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid'),
-            'rejected': PatternFill(start_color='FFEBEE', end_color='FFEBEE', fill_type='solid'),
-        }
-
-        row_num = 4
-        for idx, leave in enumerate(leaves, 1):
-            emp = leave.employee
-            mgr_name = leave.manager_approved_by.get_full_name() if leave.manager_approved_by else '-'
-            app_name = leave.approved_by.get_full_name() if leave.approved_by else '-'
-            row_data = [
-                idx,
-                emp.full_name,
-                emp.department.name if emp.department else '-',
-                emp.direction or '-',
-                type_labels.get(leave.leave_type, leave.leave_type),
-                leave.start_date.strftime('%d/%m/%Y') if leave.start_date else '-',
-                leave.end_date.strftime('%d/%m/%Y') if leave.end_date else '-',
-                leave.days_count,
-                status_labels.get(leave.status, leave.status),
-                mgr_name,
-                app_name,
-            ]
-            row_fill = status_fills.get(leave.status, PatternFill())
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.fill = row_fill
-                cell.alignment = styles['center_align'] if col_idx in (1, 6, 7, 8, 9) else styles['cell_align']
-            ws.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        from openpyxl.utils import get_column_letter
-        last_col = get_column_letter(len(headers))
-        ws.merge_cells(f'A{row_num}:{last_col}{row_num}')
-        total_cell = ws.cell(row=row_num, column=1, value=f'TOTAL : {len(leaves)} demandes de congés')
-        total_cell.font = Font(name='Arial', bold=True, size=11)
-        total_cell.alignment = styles['center_align']
-        total_cell.border = styles['thin_border']
-
-        return _make_response(wb, f'Rapport_Conges_{date.today().strftime("%Y%m%d")}.xlsx')
-
-
-class DepartmentsReportView(APIView):
-    """Rapport par entreprise Excel"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        styles = _get_excel_styles()
-        employees = _filter_employees(request.user).select_related('department').order_by('department__name', 'last_name', 'first_name')
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Par Entreprise"
-
-        headers = ['N°', 'NOM COMPLET', 'EMAIL', 'TÉLÉPHONE', 'DIRECTION', 'POSTE', 'DATE EMBAUCHE', 'SALAIRE', 'STATUT']
-        col_widths = [6, 30, 28, 16, 25, 20, 14, 14, 12]
-
-        _write_title(ws, 'RAPPORT PAR ENTREPRISE', len(headers), styles)
-        _write_headers(ws, headers, col_widths, row=3, styles=styles)
-
-        dept_fill = PatternFill(start_color='E3F2FD', end_color='E3F2FD', fill_type='solid')
-        dept_font = Font(name='Arial', bold=True, size=11, color='1565C0')
-        status_labels = {'active': 'Actif', 'inactive': 'Inactif', 'on_leave': 'En congé'}
-
-        row_num = 4
-        current_dept = None
-        dept_count = 0
-        global_idx = 0
-
-        for emp in employees:
-            dept_name = emp.department.name if emp.department else 'Sans entreprise'
-
-            # Nouvelle entreprise : ecrire le sous-titre
-            if dept_name != current_dept:
-                if current_dept is not None:
-                    row_num += 1  # ligne vide entre entreprises
-                current_dept = dept_name
-                dept_count = employees.filter(department=emp.department).count() if emp.department else 0
-
-                from openpyxl.utils import get_column_letter
-                last_col = get_column_letter(len(headers))
-                ws.merge_cells(f'A{row_num}:{last_col}{row_num}')
-                dept_cell = ws.cell(row=row_num, column=1, value=f'{dept_name} ({dept_count} agents)')
-                dept_cell.font = dept_font
-                dept_cell.fill = dept_fill
-                dept_cell.alignment = Alignment(horizontal='left', vertical='center')
-                dept_cell.border = styles['thin_border']
-                ws.row_dimensions[row_num].height = 28
-                row_num += 1
-
-            global_idx += 1
-            row_data = [
-                global_idx,
-                emp.full_name,
-                emp.email or '-',
-                emp.phone or '-',
-                emp.direction or '-',
-                emp.position or '-',
-                emp.hire_date.strftime('%d/%m/%Y') if emp.hire_date else '-',
-                f'{emp.salary:,.0f}' if emp.salary else '-',
-                status_labels.get(emp.status, emp.status),
-            ]
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.alignment = styles['center_align'] if col_idx in (1, 7, 8, 9) else styles['cell_align']
-            ws.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        # Total general
-        from openpyxl.utils import get_column_letter
-        last_col = get_column_letter(len(headers))
-        ws.merge_cells(f'A{row_num}:{last_col}{row_num}')
-        total_cell = ws.cell(row=row_num, column=1, value=f'TOTAL GÉNÉRAL : {global_idx} employés')
-        total_cell.font = Font(name='Arial', bold=True, size=11)
-        total_cell.alignment = styles['center_align']
-        total_cell.border = styles['thin_border']
-
-        return _make_response(wb, f'Rapport_Entreprises_{date.today().strftime("%Y%m%d")}.xlsx')
-
-
-class CompleteReportView(APIView):
-    """Rapport RH complet (3 feuilles)"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        styles = _get_excel_styles()
-        employees = _filter_employees(request.user).select_related('department').order_by('last_name', 'first_name')
-        employee_ids = employees.values_list('id', flat=True)
-
-        wb = Workbook()
-
-        # ===== FEUILLE 1 : EMPLOYES =====
-        ws1 = wb.active
-        ws1.title = "Employés"
-
-        h1 = ['N°', 'NOM', 'PRÉNOM', 'EMAIL', 'TÉLÉPHONE', 'ENTREPRISE', 'DIRECTION', 'POSTE', 'MATRICULE', 'CNPS', 'DATE EMBAUCHE', 'SALAIRE', 'STATUT']
-        w1 = [6, 20, 20, 28, 16, 20, 25, 20, 14, 14, 14, 14, 12]
-
-        _write_title(ws1, 'RAPPORT RH COMPLET - EMPLOYÉS', len(h1), styles)
-        _write_headers(ws1, h1, w1, row=3, styles=styles)
-
-        status_labels = {'active': 'Actif', 'inactive': 'Inactif', 'on_leave': 'En congé'}
-        row_num = 4
-        for idx, emp in enumerate(employees, 1):
-            row_data = [
-                idx, emp.last_name, emp.first_name, emp.email or '-', emp.phone or '-',
-                emp.department.name if emp.department else '-', emp.direction or '-',
-                emp.position or '-', emp.matricule or '-', emp.cnps or '-',
-                emp.hire_date.strftime('%d/%m/%Y') if emp.hire_date else '-',
-                f'{emp.salary:,.0f}' if emp.salary else '-',
-                status_labels.get(emp.status, emp.status),
-            ]
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws1.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.alignment = styles['center_align'] if col_idx in (1, 9, 10, 11, 12, 13) else styles['cell_align']
-            ws1.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        # ===== FEUILLE 2 : CONGES =====
-        ws2 = wb.create_sheet("Congés")
-
-        h2 = ['N°', 'NOM COMPLET', 'ENTREPRISE', 'TYPE', 'DÉBUT', 'FIN', 'JOURS', 'STATUT', 'VALIDÉ MANAGER', 'APPROUVÉ ENTREPRISE']
-        w2 = [6, 30, 20, 18, 14, 14, 8, 18, 25, 25]
-
-        _write_title(ws2, 'RAPPORT RH COMPLET - CONGÉS', len(h2), styles)
-        _write_headers(ws2, h2, w2, row=3, styles=styles)
-
-        type_labels = {
-            'annual': 'Congé annuel', 'sick': 'Maladie', 'maternity': 'Maternité',
-            'paternity': 'Paternité', 'unpaid': 'Sans solde', 'other': 'Autre',
-        }
-        leave_status_labels = {
-            'pending': 'En attente', 'manager_approved': 'Validé Manager',
-            'approved': 'Approuvé', 'rejected': 'Rejeté',
-        }
-
-        leaves = Leave.objects.filter(employee_id__in=employee_ids).select_related(
-            'employee', 'employee__department', 'manager_approved_by', 'approved_by'
-        ).order_by('-created_at')
-
-        row_num = 4
-        for idx, leave in enumerate(leaves, 1):
-            emp = leave.employee
-            row_data = [
-                idx, emp.full_name, emp.department.name if emp.department else '-',
-                type_labels.get(leave.leave_type, leave.leave_type),
-                leave.start_date.strftime('%d/%m/%Y') if leave.start_date else '-',
-                leave.end_date.strftime('%d/%m/%Y') if leave.end_date else '-',
-                leave.days_count,
-                leave_status_labels.get(leave.status, leave.status),
-                leave.manager_approved_by.get_full_name() if leave.manager_approved_by else '-',
-                leave.approved_by.get_full_name() if leave.approved_by else '-',
-            ]
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws2.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.alignment = styles['center_align'] if col_idx in (1, 5, 6, 7, 8) else styles['cell_align']
-            ws2.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        # ===== FEUILLE 3 : PRESENCES =====
-        ws3 = wb.create_sheet("Présences")
-
-        h3 = ['N°', 'NOM COMPLET', 'ENTREPRISE', 'DATE', 'ARRIVÉE', 'DÉPART', 'HEURES', 'STATUT']
-        w3 = [6, 30, 20, 14, 12, 12, 10, 14]
-
-        _write_title(ws3, 'RAPPORT RH COMPLET - PRÉSENCES', len(h3), styles)
-        _write_headers(ws3, h3, w3, row=3, styles=styles)
-
-        att_status_labels = {'present': 'Présent', 'absent': 'Absent', 'late': 'En retard', 'half_day': 'Demi-journée'}
-        attendances = Attendance.objects.filter(employee_id__in=employee_ids).select_related(
-            'employee', 'employee__department'
-        ).order_by('-date')
-
-        row_num = 4
-        for idx, att in enumerate(attendances, 1):
-            emp = att.employee
-            row_data = [
-                idx, emp.full_name, emp.department.name if emp.department else '-',
-                att.date.strftime('%d/%m/%Y') if att.date else '-',
-                att.check_in.strftime('%H:%M') if att.check_in else '-',
-                att.check_out.strftime('%H:%M') if att.check_out else '-',
-                str(att.hours_worked) if att.hours_worked else '-',
-                att_status_labels.get(att.status, att.status),
-            ]
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws3.cell(row=row_num, column=col_idx, value=value)
-                cell.font = styles['cell_font']
-                cell.border = styles['thin_border']
-                cell.alignment = styles['center_align'] if col_idx in (1, 4, 5, 6, 7, 8) else styles['cell_align']
-            ws3.row_dimensions[row_num].height = 20
-            row_num += 1
-
-        return _make_response(wb, f'Rapport_RH_Complet_{date.today().strftime("%Y%m%d")}.xlsx')

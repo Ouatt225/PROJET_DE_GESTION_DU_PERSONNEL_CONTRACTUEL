@@ -1,22 +1,66 @@
+"""
+Serializers DRF pour l'API REST du système de gestion du personnel contractuel.
+
+Chaque serializer transforme les instances de modèle Django en représentations
+JSON (et inversement) pour les échanges avec le frontend.
+
+Serializers disponibles :
+  DirectionSerializer     — Direction (id, name uniquement)
+  PasswordRecordSerializer — Mot de passe chiffré, exposé déchiffré via get_password_plain
+  UserSerializer          — Utilisateur Django (lecture)
+  DepartmentSerializer    — Entreprise prestataire avec compteur d'employés
+  EmployeeSerializer      — Agent contractuel avec données calculées (âge, solde congés)
+  LeaveSerializer         — Demande de congé avec validation des dates et du solde
+  AttendanceSerializer    — Pointage avec validation check_in < check_out
+  RegisterSerializer      — Création de compte avec confirmation de mot de passe
+
+Conventions :
+  - Les champs en lecture seule sont déclarés dans read_only_fields ou via ReadOnlyField.
+  - Les champs calculés (propriétés du modèle) sont exposés via SerializerMethodField
+    ou ReadOnlyField.
+  - La validation métier est centralisée dans validate() ou validate_<field>().
+"""
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Direction, Department, Employee, Leave, Attendance, PasswordRecord
 
 
 class DirectionSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle Direction"""
+    """Serializer minimal pour le modèle Direction.
+
+    Expose uniquement l'identifiant et le nom, suffisants pour alimenter
+    les listes déroulantes du formulaire de création de manager.
+    """
+
     class Meta:
         model = Direction
         fields = ['id', 'name']
 
 
 class PasswordRecordSerializer(serializers.ModelSerializer):
-    """Serializer pour la table des mots de passe"""
+    """Serializer pour la table des mots de passe.
+
+    Le champ `password_plain` est calculé dynamiquement via get_password()
+    (déchiffrement Fernet) et exposé en lecture seule.
+    Les données de l'utilisateur (username, email, nom complet) sont dénormalisées
+    pour faciliter l'affichage dans l'interface d'administration.
+
+    Champs calculés :
+        username (str)      : Identifiant de connexion de l'utilisateur.
+        full_name (str)     : Nom complet ou username si le nom est vide.
+        email (str)         : Adresse e-mail de l'utilisateur.
+        direction (str)     : Direction de l'employé associé ('-' si N/A).
+        department_name (str): Nom de l'entreprise de l'employé ('-' si N/A).
+        password_plain (str): Mot de passe déchiffré (lecture seule).
+    """
+
     username = serializers.CharField(source='user.username', read_only=True)
     full_name = serializers.SerializerMethodField()
     email = serializers.CharField(source='user.email', read_only=True)
     direction = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+    password_plain = serializers.SerializerMethodField()
 
     class Meta:
         model = PasswordRecord
@@ -26,11 +70,39 @@ class PasswordRecordSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def get_password_plain(self, obj):
+        """Retourne le mot de passe déchiffré via Fernet.
+
+        Args:
+            obj (PasswordRecord): Instance du modèle.
+
+        Returns:
+            str: Mot de passe en clair, ou '(indéchiffrable)' si la valeur
+                 stockée n'est pas un token Fernet valide.
+        """
+        return obj.get_password()
+
     def get_full_name(self, obj):
+        """Retourne le nom complet de l'utilisateur, ou son username si vide.
+
+        Args:
+            obj (PasswordRecord): Instance du modèle.
+
+        Returns:
+            str: Nom complet ('Prénom Nom') ou username.
+        """
         name = obj.user.get_full_name()
         return name if name else obj.user.username
 
     def get_direction(self, obj):
+        """Retourne la direction de l'employé associé à cet utilisateur.
+
+        Args:
+            obj (PasswordRecord): Instance du modèle.
+
+        Returns:
+            str: Nom de la direction, ou '-' si l'utilisateur n'a pas de profil employé.
+        """
         try:
             employee = obj.user.employee_profile
             return employee.direction or '-'
@@ -38,6 +110,14 @@ class PasswordRecordSerializer(serializers.ModelSerializer):
             return '-'
 
     def get_department_name(self, obj):
+        """Retourne le nom de l'entreprise de l'employé associé.
+
+        Args:
+            obj (PasswordRecord): Instance du modèle.
+
+        Returns:
+            str: Nom de l'entreprise, ou '-' si l'utilisateur n'a pas de profil employé.
+        """
         try:
             employee = obj.user.employee_profile
             return employee.department.name if employee.department else '-'
@@ -46,7 +126,12 @@ class PasswordRecordSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle User"""
+    """Serializer en lecture seule pour le modèle User Django.
+
+    Utilisé pour dénormaliser les informations de l'utilisateur dans d'autres
+    serializers (ex. EmployeeSerializer.user_details).
+    """
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name']
@@ -54,7 +139,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle Department"""
+    """Serializer pour les entreprises prestataires (Department).
+
+    Le champ `employees_count` est exposé via la propriété du modèle
+    et est automatiquement en lecture seule (ReadOnlyField).
+    """
+
     employees_count = serializers.ReadOnlyField()
 
     class Meta:
@@ -64,18 +154,40 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle Employee"""
+    """Serializer complet pour les agents contractuels.
+
+    Expose toutes les données personnelles, professionnelles et calculées
+    d'un employé. Les champs calculés incluent l'âge, l'année de retraite
+    et les informations de gestion des congés.
+
+    Champs calculés :
+        full_name (str)                 : Prénom + Nom (propriété du modèle).
+        department_name (str)           : Nom de l'entreprise (FK dénormalisée).
+        user_details (dict)             : Données complètes du User associé.
+        cnps_number (str)               : Alias du champ cnps (compatibilité frontend).
+        leave_balance (int)             : Solde de congés payés restants.
+        leaves_taken_this_year (int)    : Jours de congés payés approuvés cette année.
+        leaves_pending_this_year (int)  : Jours de congés payés en attente.
+        annual_leave_allowance (int)    : Quota annuel fixe (ANNUAL_LEAVE_ALLOWANCE).
+        age (int|None)                  : Âge calculé depuis birth_date.
+        retirement_year (int|None)      : Année de départ à la retraite (birth_date + 60).
+
+    Validations :
+        email      : Unicité vérifiée en création et édition.
+        birth_date : L'employé doit avoir entre 18 et 60 ans.
+    """
+
     full_name = serializers.ReadOnlyField()
     department_name = serializers.CharField(source='department.name', read_only=True)
     user_details = UserSerializer(source='user', read_only=True)
-    # Alias pour la compatibilité frontend
-    cnps_number = serializers.CharField(source='cnps', required=False, allow_blank=True, allow_null=True)
-    # Champs pour la gestion des congés
+    # Alias pour la compatibilité avec certains formulaires frontend
+    cnps_number = serializers.CharField(source='cnps', required=True)
+    # Champs de gestion des congés
     leave_balance = serializers.ReadOnlyField()
     leaves_taken_this_year = serializers.ReadOnlyField()
     leaves_pending_this_year = serializers.ReadOnlyField()
     annual_leave_allowance = serializers.SerializerMethodField()
-    # Champs pour l'âge et la retraite
+    # Champs calculés démographiques
     age = serializers.SerializerMethodField()
     retirement_year = serializers.SerializerMethodField()
 
@@ -91,12 +203,33 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'annual_leave_allowance', 'age', 'retirement_year', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'phone': {'required': True, 'allow_blank': False, 'allow_null': False},
+            'matricule': {'required': True, 'allow_blank': False, 'allow_null': False},
+            'cnps': {'required': True, 'allow_blank': False, 'allow_null': False},
+            'address': {'required': True, 'allow_blank': False, 'allow_null': False},
+        }
 
     def get_annual_leave_allowance(self, obj):
+        """Retourne le quota annuel de congés payés (constante de classe).
+
+        Args:
+            obj (Employee): Instance de l'employé.
+
+        Returns:
+            int: ANNUAL_LEAVE_ALLOWANCE (30 jours).
+        """
         return Employee.ANNUAL_LEAVE_ALLOWANCE
 
     def get_age(self, obj):
-        """Calcule l'âge de l'employé"""
+        """Calcule l'âge de l'employé à partir de sa date de naissance.
+
+        Args:
+            obj (Employee): Instance de l'employé.
+
+        Returns:
+            int|None: Âge en années entières, ou None si birth_date est absent.
+        """
         if obj.birth_date:
             from datetime import date
             today = date.today()
@@ -107,26 +240,57 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return None
 
     def get_retirement_year(self, obj):
-        """Calcule l'année de départ à la retraite (60 ans)"""
+        """Calcule l'année prévue de départ à la retraite (âge légal : 60 ans).
+
+        Args:
+            obj (Employee): Instance de l'employé.
+
+        Returns:
+            int|None: Année de retraite (birth_date.year + 60), ou None si absence de birth_date.
+        """
         if obj.birth_date:
             return obj.birth_date.year + 60
         return None
 
     def validate_email(self, value):
-        """Valide l'unicité de l'email"""
+        """Vérifie l'unicité de l'email en création et en édition.
+
+        En mode édition (instance existante), l'email de l'instance courante
+        est exclu de la vérification pour permettre de sauvegarder sans modifier l'email.
+
+        Args:
+            value (str): Adresse e-mail saisie.
+
+        Returns:
+            str: Email validé.
+
+        Raises:
+            serializers.ValidationError: Si l'email est déjà utilisé par un autre employé.
+        """
         instance = self.instance
         if instance:
-            # Mode édition
             if Employee.objects.exclude(pk=instance.pk).filter(email=value).exists():
                 raise serializers.ValidationError("Cet email est déjà utilisé par un autre employé.")
         else:
-            # Mode création
             if Employee.objects.filter(email=value).exists():
                 raise serializers.ValidationError("Cet email est déjà utilisé.")
         return value
 
     def validate_birth_date(self, value):
-        """Valide que l'employé a entre 18 et 60 ans"""
+        """Vérifie que l'employé a entre 18 et 60 ans à la date du jour.
+
+        La limite à 60 ans correspond à l'âge légal de la retraite.
+
+        Args:
+            value (date): Date de naissance saisie.
+
+        Returns:
+            date: Date de naissance validée.
+
+        Raises:
+            serializers.ValidationError: Si l'âge calculé est inférieur à 18
+                ou supérieur ou égal à 60 ans.
+        """
         if value:
             from datetime import date
             today = date.today()
@@ -144,7 +308,21 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
 class LeaveSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle Leave"""
+    """Serializer pour les demandes de congé.
+
+    Dénormalise le nom de l'employé et des approbateurs pour l'affichage.
+    Effectue deux validations métier critiques :
+      1. La date de fin doit être postérieure ou égale à la date de début.
+      2. Pour les congés payés, le solde disponible (après soustraction des
+         demandes en attente) doit couvrir la durée demandée.
+
+    Champs calculés :
+        employee_name (str)           : Nom complet de l'employé.
+        days_count (int)              : Nombre de jours (propriété du modèle).
+        manager_approved_by_name (str): Nom du manager validateur.
+        approved_by_name (str)        : Nom de l'approbateur final.
+    """
+
     employee_name = serializers.CharField(source='employee.full_name', read_only=True)
     days_count = serializers.ReadOnlyField()
     manager_approved_by_name = serializers.CharField(source='manager_approved_by.get_full_name', read_only=True)
@@ -159,25 +337,43 @@ class LeaveSerializer(serializers.ModelSerializer):
             'approved_by', 'approved_by_name', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'reason': {'required': True, 'allow_blank': False, 'allow_null': False},
+        }
 
     def validate(self, data):
-        """Valide les dates de congé et le solde disponible"""
+        """Valide les dates de congé et le solde de congés payés disponible.
+
+        Vérifications effectuées :
+          1. end_date >= start_date.
+          2. Pour leave_type='paid' : le solde effectif (balance - jours en attente)
+             doit être supérieur ou égal au nombre de jours demandés.
+
+        Args:
+            data (dict): Données désérialisées du formulaire.
+
+        Returns:
+            dict: Données validées inchangées.
+
+        Raises:
+            serializers.ValidationError: Si les dates sont invalides ou
+                si le solde de congés est insuffisant.
+        """
         if data.get('start_date') and data.get('end_date'):
             if data['end_date'] < data['start_date']:
                 raise serializers.ValidationError({
                     'end_date': "La date de fin doit être postérieure à la date de début."
                 })
 
-            # Calculer le nombre de jours demandés
             days_requested = (data['end_date'] - data['start_date']).days + 1
 
-            # Vérifier le solde de congés (seulement pour les congés payés)
+            # Vérifier le solde uniquement pour les congés payés
             employee = data.get('employee')
             if employee and data.get('leave_type') == 'paid':
                 available_balance = employee.leave_balance
                 pending_days = employee.leaves_pending_this_year
 
-                # Le solde disponible moins les jours déjà en attente
+                # Solde effectif = solde disponible moins les jours déjà en attente
                 effective_balance = available_balance - pending_days
 
                 if days_requested > effective_balance:
@@ -191,7 +387,16 @@ class LeaveSerializer(serializers.ModelSerializer):
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
-    """Serializer pour le modèle Attendance"""
+    """Serializer pour les enregistrements de présence (pointages).
+
+    Le champ `hours_worked` est calculé côté modèle à partir de check_in et check_out.
+    La validation s'assure que l'heure de sortie est postérieure à l'heure d'entrée.
+
+    Champs calculés :
+        employee_name (str): Nom complet de l'employé.
+        hours_worked (float): Heures travaillées (propriété du modèle).
+    """
+
     employee_name = serializers.CharField(source='employee.full_name', read_only=True)
     hours_worked = serializers.ReadOnlyField()
 
@@ -205,7 +410,17 @@ class AttendanceSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate(self, data):
-        """Valide les heures de pointage"""
+        """Valide que l'heure de sortie est postérieure à l'heure d'entrée.
+
+        Args:
+            data (dict): Données désérialisées.
+
+        Returns:
+            dict: Données validées inchangées.
+
+        Raises:
+            serializers.ValidationError: Si check_out <= check_in.
+        """
         if data.get('check_in') and data.get('check_out'):
             if data['check_out'] <= data['check_in']:
                 raise serializers.ValidationError({
@@ -215,7 +430,18 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    """Serializer pour l'enregistrement d'utilisateurs"""
+    """Serializer pour la création d'un nouveau compte utilisateur.
+
+    Inclut la confirmation de mot de passe (password2) et l'attribution
+    d'un rôle. Les permissions Django (is_staff, is_superuser) sont
+    définies automatiquement selon le rôle choisi.
+
+    Fields:
+        password (str)  : Mot de passe (write_only).
+        password2 (str) : Confirmation du mot de passe (write_only).
+        role (str)      : 'admin' | 'manager' | 'entreprise' | 'employee' (optionnel, défaut: 'employee').
+    """
+
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     role = serializers.ChoiceField(choices=['admin', 'manager', 'entreprise', 'employee'], required=False)
@@ -225,11 +451,33 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ['username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role']
 
     def validate(self, attrs):
+        """Vérifie que les deux mots de passe correspondent.
+
+        Args:
+            attrs (dict): Données désérialisées.
+
+        Returns:
+            dict: Données validées.
+
+        Raises:
+            serializers.ValidationError: Si password != password2.
+        """
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})
         return attrs
 
     def create(self, validated_data):
+        """Crée l'utilisateur et configure ses permissions selon le rôle.
+
+        Supprime password2 des données avant création.
+        Définit is_staff=True pour 'manager' et is_superuser=True pour 'admin'.
+
+        Args:
+            validated_data (dict): Données validées (sans erreurs).
+
+        Returns:
+            User: Instance de l'utilisateur Django créé.
+        """
         validated_data.pop('password2')
         role = validated_data.pop('role', 'employee')
 
@@ -241,7 +489,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
 
-        # Définir les permissions en fonction du rôle
+        # Définir les permissions Django selon le rôle
         if role == 'admin':
             user.is_staff = True
             user.is_superuser = True
