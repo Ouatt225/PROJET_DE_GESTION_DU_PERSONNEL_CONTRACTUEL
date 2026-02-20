@@ -32,6 +32,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django import forms
+from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from .models import Direction, ManagerProfile, CompanyProfile, Department, Employee, Leave, Attendance, PasswordRecord
 from .encryption import encrypt_password, decrypt_password
 
@@ -254,6 +255,13 @@ class CustomUserChangeForm(forms.ModelForm):
         ('admin', 'Administrateur'),
     ]
 
+    password = ReadOnlyPasswordHashField(
+        label='Mot de passe',
+        help_text='Les mots de passe bruts ne sont pas enregistrés. '
+                  'Vous pouvez modifier le mot de passe en utilisant '
+                  '<a href="../password/">ce formulaire</a>.'
+    )
+
     role = forms.ChoiceField(label='Rôle', choices=ROLE_CHOICES)
     directions = forms.ModelMultipleChoiceField(
         queryset=Direction.objects.all(),
@@ -271,7 +279,7 @@ class CustomUserChangeForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'first_name', 'last_name', 'is_active')
+        fields = ('username', 'password', 'email', 'first_name', 'last_name', 'is_active')
 
     def __init__(self, *args, **kwargs):
         """Initialise le formulaire et détecte le rôle courant de l'utilisateur.
@@ -410,7 +418,7 @@ class CustomUserAdmin(BaseUserAdmin):
 
     fieldsets = (
         ('Informations de connexion', {
-            'fields': ('username', 'email')
+            'fields': ('username', 'password', 'email')
         }),
         ('Informations personnelles', {
             'fields': ('first_name', 'last_name')
