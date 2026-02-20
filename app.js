@@ -163,6 +163,14 @@ function applyRolePermissions() {
             btn.classList.add('hidden');
         });
     }
+
+    if (role === 'entreprise') {
+        document.getElementById('addEmployeeBtn')?.classList.add('hidden');
+    }
+
+    if (role === 'manager') {
+        document.getElementById('addEmployeeBtn')?.classList.add('hidden');
+    }
 }
 
 // ===========================

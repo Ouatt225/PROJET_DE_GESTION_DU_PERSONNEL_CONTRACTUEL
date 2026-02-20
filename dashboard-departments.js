@@ -32,10 +32,30 @@
  */
 function renderDepartmentsGrid() {
     const grid = document.getElementById('departmentsGrid');
+    const role = AppState.currentUser?.role;
 
-    grid.innerHTML = AppState.departments.map(dept => {
+    // L'entreprise ne voit que son propre département
+    let visibleDepts = AppState.departments;
+    if (role === 'entreprise') {
+        const managedDeptName = AppState.currentUser?.managed_department?.name;
+        if (managedDeptName) {
+            visibleDepts = AppState.departments.filter(d => d.name === managedDeptName);
+        }
+    }
+
+    grid.innerHTML = visibleDepts.map(dept => {
         // Compter les employés affiliés à cette entreprise depuis l'état local
         const employeeCount = AppState.employees.filter(e => e.department === dept.name).length;
+
+        // Seul l'admin voit les boutons Modifier et Supprimer
+        const actionsHtml = role === 'admin'
+            ? `<button class="action-btn edit" onclick="editDepartment(${dept.id})">
+                   <i class="fas fa-edit"></i> Modifier
+               </button>
+               <button class="action-btn delete" onclick="deleteDepartment(${dept.id})">
+                   <i class="fas fa-trash"></i> Supprimer
+               </button>`
+            : '';
 
         return `
             <div class="department-card">
@@ -52,12 +72,7 @@ function renderDepartmentsGrid() {
                     </div>
                 </div>
                 <div class="department-actions">
-                    <button class="action-btn edit" onclick="editDepartment(${dept.id})">
-                        <i class="fas fa-edit"></i> Modifier
-                    </button>
-                    <button class="action-btn delete" onclick="deleteDepartment(${dept.id})">
-                        <i class="fas fa-trash"></i> Supprimer
-                    </button>
+                    ${actionsHtml}
                 </div>
             </div>
         `;

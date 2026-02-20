@@ -45,6 +45,9 @@ function renderEmployeesTable() {
         return matchSearch && matchDept && matchPos;
     });
 
+    const role = AppState.currentUser?.role;
+    const canEditDelete = role === 'admin';
+
     const tbody = document.getElementById('employeesTableBody');
     tbody.innerHTML = filteredEmployees.map(emp => `
         <tr>
@@ -60,12 +63,13 @@ function renderEmployeesTable() {
                     <button class="action-btn download" onclick="downloadEmployeeProfile(${emp.id})" title="Télécharger le profil">
                         <i class="fas fa-download"></i>
                     </button>
+                    ${canEditDelete ? `
                     <button class="action-btn edit" onclick="editEmployee(${emp.id})">
                         <i class="fas fa-edit"></i> Modifier
                     </button>
                     <button class="action-btn delete" onclick="deleteEmployee(${emp.id})">
                         <i class="fas fa-trash"></i> Supprimer
-                    </button>
+                    </button>` : ''}
                 </div>
             </td>
         </tr>

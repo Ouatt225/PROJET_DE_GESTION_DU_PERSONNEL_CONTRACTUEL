@@ -168,6 +168,7 @@ async function loadDataFromAPI() {
                 phone: emp.phone,
                 department: emp.department_name || emp.department,
                 departmentId: emp.department,
+                direction: emp.direction,
                 position: emp.position,
                 hireDate: emp.hire_date,
                 salary: emp.salary,
@@ -177,6 +178,22 @@ async function loadDataFromAPI() {
                 status: emp.status
             }))
             : [];
+
+        // Filtrage côté client selon le rôle (couche de sécurité supplémentaire)
+        const role = AppState.currentUser?.role;
+        if (role === 'entreprise') {
+            const managedDeptName = AppState.currentUser?.managed_department?.name;
+            if (managedDeptName) {
+                AppState.employees = AppState.employees.filter(emp => emp.department === managedDeptName);
+            }
+        } else if (role === 'manager') {
+            const managedDirections = AppState.currentUser?.managed_directions || [];
+            if (managedDirections.length > 0) {
+                AppState.employees = AppState.employees.filter(emp => managedDirections.includes(emp.direction));
+            } else {
+                AppState.employees = [];
+            }
+        }
 
         const leaves = await apiGet(API_ENDPOINTS.LEAVES);
         AppState.leaves = leaves
@@ -388,7 +405,21 @@ function applyRolePermissions() {
     }
 
     if (role === 'entreprise') {
+        document.getElementById('addEmployeeBtn')?.classList.add('hidden');
         document.getElementById('addDepartmentBtn')?.classList.add('hidden');
+        document.getElementById('requestLeaveBtn')?.classList.add('hidden');
+        document.querySelectorAll('.action-btn.edit, .action-btn.delete').forEach(btn => {
+            btn.classList.add('hidden');
+        });
+    }
+
+    if (role === 'manager') {
+        document.getElementById('addEmployeeBtn')?.classList.add('hidden');
+        document.getElementById('addDepartmentBtn')?.classList.add('hidden');
+        document.getElementById('requestLeaveBtn')?.classList.add('hidden');
+        document.querySelectorAll('.action-btn.edit, .action-btn.delete').forEach(btn => {
+            btn.classList.add('hidden');
+        });
     }
 }
 
