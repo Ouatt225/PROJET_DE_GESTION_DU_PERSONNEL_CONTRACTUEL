@@ -28,7 +28,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DirectionViewSet, PasswordRecordViewSet, DepartmentViewSet, EmployeeViewSet,
-    LeaveViewSet, AttendanceViewSet,
+    LeaveViewSet, AttendanceViewSet, LeaveNotificationViewSet,
     RegisterView, LoginView, ChangePasswordView, DashboardStatsView,
 )
 from .views_reports import (
@@ -42,6 +42,7 @@ router.register(r'departments', DepartmentViewSet)
 router.register(r'employees', EmployeeViewSet)
 router.register(r'leaves', LeaveViewSet)
 router.register(r'attendances', AttendanceViewSet)
+router.register(r'notifications', LeaveNotificationViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

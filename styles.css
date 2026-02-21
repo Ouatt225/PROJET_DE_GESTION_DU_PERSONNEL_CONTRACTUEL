@@ -2990,3 +2990,295 @@ h1, h2, h3, h4, h5, h6 {
 .stat-card:hover::after {
     animation: shine 0.8s;
 }
+
+/* ===========================
+   ALARMES CONGÉS — Cloche & Dropdown
+   =========================== */
+
+/* Wrapper positionné dans la top-bar */
+.notification-bell-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-right: 0.75rem;
+}
+
+/* Bouton cloche */
+.notification-bell-btn {
+    position: relative;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    transition: color 0.2s, background 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.notification-bell-btn:hover {
+    color: var(--terracotta);
+    background: rgba(196, 69, 54, 0.08);
+}
+
+/* Badge rouge */
+.notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 18px;
+    height: 18px;
+    background: var(--terracotta);
+    color: #fff;
+    border-radius: 9px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Dropdown */
+.notification-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 340px;
+    max-height: 480px;
+    background: var(--bg-card);
+    border: 1px solid var(--light-gray);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.13);
+    z-index: 9999;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.notification-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--light-gray);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: var(--off-white);
+}
+
+.notification-mark-all-btn {
+    background: none;
+    border: none;
+    color: var(--terracotta);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: background 0.15s;
+}
+
+.notification-mark-all-btn:hover {
+    background: rgba(196, 69, 54, 0.08);
+}
+
+/* Liste */
+.notification-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.notification-empty {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.85rem;
+}
+
+/* Item individuel */
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--light-gray);
+    transition: background 0.15s;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item:hover {
+    background: var(--off-white);
+}
+
+.notif-icon-col {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(196, 69, 54, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--terracotta);
+    font-size: 0.85rem;
+    margin-top: 2px;
+}
+
+.notif-content-col {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 2px;
+}
+
+.notif-employee {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notif-tag {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.notif-tag-7days {
+    background: rgba(212, 165, 116, 0.2);
+    color: #b07a30;
+}
+
+.notif-tag-eve {
+    background: rgba(196, 69, 54, 0.15);
+    color: var(--terracotta-dark);
+}
+
+.notif-detail {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notif-days {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* Bouton marquer lu */
+.notif-read-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--light-gray);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    padding: 4px 6px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    margin-top: 2px;
+}
+
+.notif-read-btn:hover {
+    color: #22c55e;
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.08);
+}
+
+/* ===========================
+   TOAST de notification
+   =========================== */
+
+.notif-toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    max-width: 380px;
+    background: var(--ink-black);
+    color: #fff;
+    padding: 0.85rem 1.1rem;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-size: 0.85rem;
+    z-index: 10000;
+    opacity: 0;
+    transform: translateY(-12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    border-left: 4px solid var(--terracotta);
+}
+
+.notif-toast.notif-toast-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notif-toast-icon {
+    color: var(--terracotta);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notif-toast span {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.notif-toast-close {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.notif-toast-close:hover {
+    color: #fff;
+}
+
+/* Adaptation top-bar pour accueillir la cloche */
+.top-bar {
+    display: flex;
+    align-items: center;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .notification-dropdown {
+        width: 290px;
+        right: -40px;
+    }
+}

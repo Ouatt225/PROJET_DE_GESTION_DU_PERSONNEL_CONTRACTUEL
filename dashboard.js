@@ -87,6 +87,10 @@ document.addEventListener('DOMContentLoaded', function() {
     checkAuthentication();
     initializeApp();
     setupEventListeners();
+    // Démarrer le système d'alarmes congés (après que AppState.currentUser est défini)
+    if (typeof initNotifications === 'function') {
+        initNotifications();
+    }
 });
 
 /**

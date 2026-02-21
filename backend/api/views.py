@@ -39,11 +39,11 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import Direction, ManagerProfile, CompanyProfile, Department, Employee, Leave, Attendance, PasswordRecord
+from .models import Direction, ManagerProfile, CompanyProfile, Department, Employee, Leave, Attendance, PasswordRecord, LeaveNotification
 from .serializers import (
     DirectionSerializer, PasswordRecordSerializer, DepartmentSerializer, EmployeeSerializer,
     LeaveSerializer, AttendanceSerializer,
-    RegisterSerializer, UserSerializer
+    RegisterSerializer, UserSerializer, LeaveNotificationSerializer
 )
 
 logger = logging.getLogger('api')
@@ -848,3 +848,120 @@ class DashboardStatsView(APIView):
             'present_today': present_today,
             'on_leave_today': on_leave_today,
         })
+
+
+class LeaveNotificationViewSet(viewsets.GenericViewSet):
+    """ViewSet pour les alarmes de rappel de congés.
+
+    Retourne uniquement les alarmes dont la trigger_date est atteinte
+    (trigger_date <= aujourd'hui) et qui sont dans le périmètre du
+    rôle de l'utilisateur (même filtrage que LeaveViewSet).
+
+    Actions disponibles :
+      GET  /api/notifications/           — Liste des alarmes dues non lues + compteur
+      GET  /api/notifications/unread_count/ — Nombre d'alarmes non lues
+      POST /api/notifications/{id}/mark_read/ — Marquer une alarme comme lue
+      POST /api/notifications/mark_all_read/  — Marquer toutes les alarmes comme lues
+    """
+
+    queryset = LeaveNotification.objects.all()
+    serializer_class = LeaveNotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
+
+    def _get_scoped_queryset(self, request):
+        """Retourne les notifications filtrées selon le rôle de l'utilisateur.
+
+        Args:
+            request (Request): Requête HTTP authentifiée.
+
+        Returns:
+            QuerySet[LeaveNotification]: Notifications dans le périmètre du rôle.
+        """
+        from datetime import date
+        ctx = get_user_context(request.user)
+        role = ctx['role']
+
+        qs = LeaveNotification.objects.filter(
+            leave__status='approved',
+            trigger_date__lte=date.today(),
+        ).select_related('leave', 'leave__employee')
+
+        if role == 'entreprise':
+            dept = ctx['department']
+            qs = qs.filter(leave__employee__department=dept)
+        elif role == 'manager':
+            directions = ctx['directions']
+            if directions:
+                qs = qs.filter(leave__employee__direction__in=directions)
+            else:
+                qs = qs.none()
+        # admin voit tout
+
+        return qs
+
+    def list(self, request):
+        """Retourne les alarmes dues (trigger_date <= aujourd'hui) non lues.
+
+        Args:
+            request (Request): Requête HTTP GET authentifiée.
+
+        Returns:
+            Response: {'notifications': [...], 'unread_count': int}
+        """
+        qs = self._get_scoped_queryset(request).filter(is_read=False)
+        serializer = self.get_serializer(qs, many=True)
+        return Response({
+            'notifications': serializer.data,
+            'unread_count': qs.count(),
+        })
+
+    @action(detail=False, methods=['get'])
+    def unread_count(self, request):
+        """Retourne uniquement le nombre d'alarmes non lues dues.
+
+        Args:
+            request (Request): Requête HTTP GET authentifiée.
+
+        Returns:
+            Response: {'unread_count': int}
+        """
+        count = self._get_scoped_queryset(request).filter(is_read=False).count()
+        return Response({'unread_count': count})
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """Marque une alarme spécifique comme lue.
+
+        Args:
+            request (Request): Requête HTTP POST authentifiée.
+            pk (str): Identifiant de l'alarme.
+
+        Returns:
+            Response: {'status': 'ok'} (HTTP 200) ou HTTP 404.
+        """
+        qs = self._get_scoped_queryset(request)
+        try:
+            notif = qs.get(pk=pk)
+        except LeaveNotification.DoesNotExist:
+            return Response(
+                {"error": "Alarme introuvable."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        notif.is_read = True
+        notif.save(update_fields=['is_read'])
+        return Response({'status': 'ok'})
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        """Marque toutes les alarmes dues comme lues.
+
+        Args:
+            request (Request): Requête HTTP POST authentifiée.
+
+        Returns:
+            Response: {'marked': int} (nombre d'alarmes marquées)
+        """
+        qs = self._get_scoped_queryset(request).filter(is_read=False)
+        count = qs.update(is_read=True)
+        return Response({'marked': count})

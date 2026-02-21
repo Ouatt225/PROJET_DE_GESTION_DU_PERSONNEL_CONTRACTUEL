@@ -638,3 +638,56 @@ class Attendance(models.Model):
             delta = check_out_time - check_in_time
             return round(delta.total_seconds() / 3600, 2)
         return 0
+
+
+class LeaveNotification(models.Model):
+    """Alarme de rappel liée à un congé approuvé.
+
+    Deux alarmes sont automatiquement créées lorsqu'un congé passe
+    au statut 'approved' :
+      - '7days' : 7 jours avant le début du congé.
+      - 'eve'   : la veille du début du congé.
+
+    Attributes:
+        leave (ForeignKey → Leave): Congé concerné.
+        notification_type (CharField): Type d'alarme ('7days' ou 'eve').
+        trigger_date (DateField): Date à partir de laquelle l'alarme est visible.
+        is_read (BooleanField): True si l'alarme a été vue/acquittée.
+        created_at (DateTimeField): Date de création (auto).
+    """
+
+    TYPE_7DAYS = '7days'
+    TYPE_EVE = 'eve'
+
+    NOTIFICATION_TYPES = [
+        (TYPE_7DAYS, 'Rappel 7 jours avant le début'),
+        (TYPE_EVE, 'Rappel veille du début'),
+    ]
+
+    leave = models.ForeignKey(
+        Leave,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        verbose_name="Congé"
+    )
+    notification_type = models.CharField(
+        max_length=10,
+        choices=NOTIFICATION_TYPES,
+        verbose_name="Type d'alarme"
+    )
+    trigger_date = models.DateField(verbose_name="Date de déclenchement")
+    is_read = models.BooleanField(default=False, verbose_name="Lu")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Alarme de congé"
+        verbose_name_plural = "Alarmes de congés"
+        unique_together = ('leave', 'notification_type')
+        ordering = ['trigger_date']
+
+    def __str__(self):
+        return (
+            f"Alarme {self.get_notification_type_display()} — "
+            f"{self.leave.employee.full_name} "
+            f"(début : {self.leave.start_date})"
+        )

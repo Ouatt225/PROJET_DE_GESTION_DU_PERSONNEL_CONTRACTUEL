@@ -46,6 +46,12 @@ const API_ENDPOINTS = {
     REPORT_DEPARTMENTS: `${API_BASE_URL}/reports/departments/`,
     REPORT_COMPLETE: `${API_BASE_URL}/reports/complete/`,
 
+    // Alarmes de congés
+    NOTIFICATIONS: `${API_BASE_URL}/notifications/`,
+    NOTIFICATIONS_UNREAD_COUNT: `${API_BASE_URL}/notifications/unread_count/`,
+    NOTIFICATION_MARK_READ: (id) => `${API_BASE_URL}/notifications/${id}/mark_read/`,
+    NOTIFICATIONS_MARK_ALL_READ: `${API_BASE_URL}/notifications/mark_all_read/`,
+
 };
 
 // ===========================

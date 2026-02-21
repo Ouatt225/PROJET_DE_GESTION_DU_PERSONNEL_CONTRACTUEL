@@ -23,7 +23,7 @@ Conventions :
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Direction, Department, Employee, Leave, Attendance, PasswordRecord
+from .models import Direction, Department, Employee, Leave, Attendance, PasswordRecord, LeaveNotification
 
 
 class DirectionSerializer(serializers.ModelSerializer):
@@ -498,3 +498,54 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user.save()
         return user
+
+
+class LeaveNotificationSerializer(serializers.ModelSerializer):
+    """Serializer pour les alarmes de rappel de congés.
+
+    Dénormalise les informations du congé et de l'employé pour
+    affichage direct dans la liste des notifications frontend.
+
+    Champs calculés :
+        employee_name (str)      : Nom complet de l'employé concerné.
+        leave_start_date (date)  : Date de début du congé.
+        leave_type_display (str) : Libellé du type de congé.
+        notification_type_display (str): Libellé du type d'alarme.
+        days_until_start (int)   : Jours restants avant le début du congé.
+    """
+
+    employee_name = serializers.CharField(
+        source='leave.employee.full_name', read_only=True
+    )
+    leave_start_date = serializers.DateField(
+        source='leave.start_date', read_only=True
+    )
+    leave_end_date = serializers.DateField(
+        source='leave.end_date', read_only=True
+    )
+    leave_type_display = serializers.CharField(
+        source='leave.get_leave_type_display', read_only=True
+    )
+    notification_type_display = serializers.CharField(
+        source='get_notification_type_display', read_only=True
+    )
+    days_until_start = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LeaveNotification
+        fields = [
+            'id', 'leave', 'notification_type', 'notification_type_display',
+            'trigger_date', 'is_read', 'created_at',
+            'employee_name', 'leave_start_date', 'leave_end_date',
+            'leave_type_display', 'days_until_start',
+        ]
+        read_only_fields = ['id', 'created_at', 'trigger_date', 'notification_type']
+
+    def get_days_until_start(self, obj):
+        """Retourne le nombre de jours restants avant le début du congé.
+
+        Returns:
+            int: Jours restants (peut être négatif si le congé a déjà commencé).
+        """
+        from datetime import date
+        return (obj.leave.start_date - date.today()).days
